@@ -1,0 +1,44 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual env
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Output reports
+final_reports/
+insight_engine_streamlit_reports/
+media_engine_streamlit_reports/
+query_engine_streamlit_reports/
+
+# OS
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Claude Code local settings
+.claude/settings.local.json
