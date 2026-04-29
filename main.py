@@ -5,7 +5,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from services.forum_service import init_forum_log, start_forum_log_monitor
@@ -49,28 +50,46 @@ app.include_router(report.router)
 
 # ── SPA & static files ──────────────────────────────────────────────────
 
-_TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
-_INDEX_HTML = _TEMPLATE_DIR / "index.html"
+_BASE = Path(__file__).resolve().parent
+_VUE_DIST = _BASE / "frontend" / "dist"
+_TEMPLATE_DIR = _BASE / "templates"
+_STATIC_DIR = _BASE / "static"
+_OLD_INDEX = _TEMPLATE_DIR / "index.html"
+_INDEX_HTML = _VUE_DIST / "index.html"
 
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_spa():
-    """Serve the SPA entry point."""
+# Static files: frontend/dist/assets (Vue build) takes priority
+if (_VUE_DIST / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=_VUE_DIST / "assets"), name="vue_assets")
+
+if _STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+# Favicon / icons from Vue dist
+@app.get("/favicon.svg")
+async def serve_favicon():
+    path = _VUE_DIST / "favicon.svg"
+    if path.exists():
+        return FileResponse(path)
+    return Response(status_code=404)
+
+
+@app.get("/icons.svg")
+async def serve_icons():
+    path = _VUE_DIST / "icons.svg"
+    if path.exists():
+        return FileResponse(path)
+    return Response(status_code=404)
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve Vue SPA — falls back to old template when dist is absent."""
     if _INDEX_HTML.exists():
-        return HTMLResponse(content=_INDEX_HTML.read_text(encoding="utf-8"))
+        return FileResponse(_INDEX_HTML)
+    if _OLD_INDEX.exists():
+        return HTMLResponse(content=_OLD_INDEX.read_text(encoding="utf-8"))
     return HTMLResponse(content="<h1>尚舆分析平台</h1>", status_code=200)
-
-
-@app.get("/graph-viewer")
-@app.get("/graph-viewer/")
-@app.get("/graph-viewer/{report_id}")
-async def serve_graph_viewer(report_id: str = None):
-    """Serve graph viewer page."""
-    graph_html = _TEMPLATE_DIR / "graph_viewer.html"
-    if graph_html.exists():
-        return HTMLResponse(content=graph_html.read_text(encoding="utf-8"))
-    return HTMLResponse(content="<h1>Graph Viewer</h1>", status_code=200)
 
 
 if __name__ == "__main__":

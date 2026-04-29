@@ -14,17 +14,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAppsStore } from '@/stores/apps'
+import { useReportStore } from '@/stores/report'
 
 const appsStore = useAppsStore()
+const reportStore = useReportStore()
 
-const apps = [
+const apps = computed(() => [
   { name: 'insight', label: 'Insight', locked: false },
   { name: 'media', label: 'Media', locked: false },
   { name: 'query', label: 'Query', locked: false },
   { name: 'forum', label: 'Forum', locked: false },
-  { name: 'report', label: 'Report', locked: false },
-]
+  {
+    name: 'report',
+    label: 'Report',
+    locked: !reportStore.enginesReady,
+  },
+])
 </script>
 
 <style scoped>

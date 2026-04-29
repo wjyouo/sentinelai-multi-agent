@@ -7,6 +7,7 @@ import { onMounted, watch } from 'vue'
 import { useAppsStore } from '@/stores/apps'
 import { useGraphStore } from '@/stores/graph'
 import { useReportStore } from '@/stores/report'
+import { useSystemStore } from '@/stores/system'
 import { useSSE } from '@/composables/useSSE'
 import { usePolling } from '@/composables/usePolling'
 import * as appsApi from '@/api/apps'
@@ -14,6 +15,7 @@ import * as appsApi from '@/api/apps'
 const appsStore = useAppsStore()
 const graphStore = useGraphStore()
 const reportStore = useReportStore()
+const systemStore = useSystemStore()
 const { connect: connectSSE } = useSSE()
 
 // Initial data loads
@@ -37,6 +39,16 @@ const { start: pollAppStatus } = usePolling(async () => {
   } catch { /* ignore */ }
 }, 5000)
 
+// Poll system status and report lock status
+const { start: pollSystemStatus } = usePolling(async () => {
+  await systemStore.fetchStatus()
+  if (systemStore.started) {
+    await reportStore.fetchStatus()
+  } else {
+    reportStore.enginesReady = false
+  }
+}, 5000)
+
 watch(() => appsStore.activeApp, (tab) => {
   if (!appsStore.activeApp) return
   if (tab === 'report') {
@@ -44,5 +56,8 @@ watch(() => appsStore.activeApp, (tab) => {
   }
 })
 
-onMounted(() => pollAppStatus())
+onMounted(() => {
+  pollAppStatus()
+  pollSystemStatus()
+})
 </script>
