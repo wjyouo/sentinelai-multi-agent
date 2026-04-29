@@ -2,7 +2,7 @@
   <div class="the-header">
     <div class="header-left">
       <el-image
-        src="/static/image/logo_compressed.png"
+        :src="logoUrl"
         alt="Logo"
         class="logo"
         fit="contain"
@@ -29,6 +29,7 @@
 
 <script setup lang="ts">
 import { Refresh, SwitchButton } from '@element-plus/icons-vue'
+import logoUrl from '@/assets/logo.png'
 
 defineEmits<{
   refresh: []

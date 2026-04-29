@@ -52,20 +52,14 @@ app.include_router(report.router)
 
 _BASE = Path(__file__).resolve().parent
 _VUE_DIST = _BASE / "frontend" / "dist"
-_TEMPLATE_DIR = _BASE / "templates"
-_STATIC_DIR = _BASE / "static"
-_OLD_INDEX = _TEMPLATE_DIR / "index.html"
 _INDEX_HTML = _VUE_DIST / "index.html"
 
 
-# Static files: frontend/dist/assets (Vue build) takes priority
+# Static files from Vue build
 if (_VUE_DIST / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=_VUE_DIST / "assets"), name="vue_assets")
 
-if _STATIC_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
-# Favicon / icons from Vue dist
 @app.get("/favicon.svg")
 async def serve_favicon():
     path = _VUE_DIST / "favicon.svg"
@@ -84,11 +78,9 @@ async def serve_icons():
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    """Serve Vue SPA — falls back to old template when dist is absent."""
+    """Serve Vue SPA entry point."""
     if _INDEX_HTML.exists():
         return FileResponse(_INDEX_HTML)
-    if _OLD_INDEX.exists():
-        return HTMLResponse(content=_OLD_INDEX.read_text(encoding="utf-8"))
     return HTMLResponse(content="<h1>尚舆分析平台</h1>", status_code=200)
 
 
