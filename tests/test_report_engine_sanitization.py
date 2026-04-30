@@ -1,7 +1,7 @@
 import unittest
 
-from ReportEngine.ir import IRValidator
-from ReportEngine.nodes.chapter_generation_node import ChapterGenerationNode
+from engines.ReportEngine.ir import IRValidator
+from engines.ReportEngine.nodes.chapter_generation_node import ChapterGenerationNode
 
 
 class ChapterSanitizationTestCase(unittest.TestCase):

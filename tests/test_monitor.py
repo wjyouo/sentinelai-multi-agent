@@ -14,7 +14,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from ForumEngine.monitor import LogMonitor
+from engines.ForumEngine.monitor import LogMonitor
 from tests import forum_log_test_data as test_data
 
 
