@@ -31,7 +31,7 @@ from typing import List, Dict, Any, Optional, Literal
 from dataclasses import dataclass, field
 from ..utils.db import fetch_all
 from datetime import datetime, timedelta, date
-from engines.InsightEngine.utils.config import settings
+from ..utils.config import settings
 
 # --- 1. 数据结构定义 ---
 

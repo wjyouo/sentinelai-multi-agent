@@ -72,7 +72,7 @@ def _has_more_paragraphs(state: InsightGraphState) -> str:
     """判断是否还有未处理的段落。"""
     idx = state.get("current_paragraph_index", 0)
     paragraphs = state.get("paragraphs", [])
-    if idx + 1 < len(paragraphs):
+    if idx < len(paragraphs):
         return "process_next"
     return "all_done"
 
@@ -94,9 +94,16 @@ def build_insight_graph(agent) -> Any:
 
     # ── 节点适配器 ──────────────────────────────────────────────
 
+    def _pc(data: dict):
+        """便捷调用 progress_callback。"""
+        cb = getattr(agent, 'progress_callback', None)
+        if cb:
+            cb(data)
+
     def node_generate_structure(state: InsightGraphState) -> dict:
         """生成报告结构，创建段落列表。"""
         query = state["query"]
+        _pc({"status": "structure", "message": "正在生成报告结构...", "progress_pct": 10})
         logger.info(f"\n{'=' * 60}")
         logger.info(f"[LangGraph] 生成报告结构: {query}")
 
@@ -124,9 +131,16 @@ def build_insight_graph(agent) -> Any:
         idx = state["current_paragraph_index"]
         paragraphs = state["paragraphs"]
         para = paragraphs[idx]
+        total = len(paragraphs)
 
-        logger.info(f"\n[步骤 2.{idx + 1}] 处理段落: {para['title']}")
-        logger.info("-" * 50)
+        pct = int(20 + (idx + 0.3) / total * 60)
+        _pc({
+            "status": "processing",
+            "message": f"处理段落 {idx + 1}/{total}: {para['title']}",
+            "progress_pct": pct,
+            "paragraph_current": idx + 1,
+            "paragraph_total": total,
+        })
 
         # 准备搜索输入
         search_input = {"title": para["title"], "content": para["content"]}
@@ -292,16 +306,25 @@ def build_insight_graph(agent) -> Any:
             total = len(updated_paragraphs)
             progress = (idx + 1) / total * 100
             logger.info(f"段落处理完成 ({progress:.1f}%)")
+            pct = int(20 + (idx + 1) / total * 60)
+            _pc({
+                "status": "processing",
+                "message": f"段落 {idx + 1}/{total} 完成",
+                "progress_pct": pct,
+                "paragraph_current": idx + 1,
+                "paragraph_total": total,
+            })
 
             # 为下一段落准备索引（条件边会判断是否越界）
             result["paragraphs"] = updated_paragraphs
             result["current_paragraph_index"] = idx + 1
-            result["current_reflection_count"] = 0
+            # 保留 new_count (≥ max_ref)，让条件边正确路由到 check_more_paragraphs
 
         return result
 
     def node_format_report(state: InsightGraphState) -> dict:
         """格式化最终报告。"""
+        _pc({"status": "finalizing", "message": "正在生成最终报告...", "progress_pct": 90})
         logger.info(f"\n[步骤 3] 生成最终报告...")
         paragraphs = state["paragraphs"]
 
@@ -330,6 +353,8 @@ def build_insight_graph(agent) -> Any:
 
     def node_save_report(state: InsightGraphState) -> dict:
         """保存报告到文件。"""
+        _pc({"status": "saving", "message": "正在保存报告...", "progress_pct": 95})
+
         if not state.get("save_report", True):
             return {}
 
@@ -410,8 +435,7 @@ def build_insight_graph(agent) -> Any:
 
 
 # ────────────────────────────────────────────────────────────────
-# 搜索执行辅助（提取自 agent._initial_search_and_summary /
-# agent._reflection_loop 中的搜索参数处理逻辑）
+# 搜索执行辅助
 # ────────────────────────────────────────────────────────────────
 
 def _execute_search_and_convert(
@@ -420,12 +444,7 @@ def _execute_search_and_convert(
     search_query: str,
     search_tool: str,
 ) -> list[dict]:
-    """
-    根据节点输出执行搜索工具并将结果转换为标准 dict 列表。
-
-    这段逻辑直接对应 agent.py 中 _initial_search_and_summary()
-    和 _reflection_loop() 里的搜索参数处理 + 结果转换部分。
-    """
+    """根据节点输出执行搜索工具并将结果转换为标准 dict 列表。"""
     search_kwargs: Dict[str, Any] = {}
 
     # 处理需要日期的工具

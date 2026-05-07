@@ -46,58 +46,24 @@ def run_engine_task(engine_type: str, query: str):
 
         agent, _config = _create_agent(engine_type)
 
+        # 将 LangGraph 各节点的进度事件转发为 SSE
+        agent.progress_callback = lambda data: publish("engine_progress", {"engine": engine_type, **data})
+
         publish("engine_progress", {
             "engine": engine_type,
-            "status": "structure",
-            "message": "正在生成报告结构...",
-            "progress_pct": 10,
+            "status": "starting",
+            "message": "Agent就绪，开始研究...",
+            "progress_pct": 5,
         })
 
-        agent._generate_report_structure(query)
-
-        total_paragraphs = len(agent.state.paragraphs)
-        publish("engine_progress", {
-            "engine": engine_type,
-            "status": "processing",
-            "message": f"共 {total_paragraphs} 个段落，开始处理...",
-            "progress_pct": 20,
-            "paragraph_current": 0,
-            "paragraph_total": total_paragraphs,
-        })
-
-        for i in range(total_paragraphs):
-            title = agent.state.paragraphs[i].title
-            publish("engine_progress", {
-                "engine": engine_type,
-                "status": "processing",
-                "message": f"处理段落 {i + 1}/{total_paragraphs}: {title}",
-                "progress_pct": int(20 + (i + 0.5) / total_paragraphs * 60),
-                "paragraph_current": i + 1,
-                "paragraph_total": total_paragraphs,
-            })
-
-            agent._initial_search_and_summary(i)
-            agent._reflection_loop(i)
-            agent.state.paragraphs[i].research.mark_completed()
-
-            publish("engine_progress", {
-                "engine": engine_type,
-                "status": "processing",
-                "message": f"段落 {i + 1}/{total_paragraphs} 完成",
-                "progress_pct": int(20 + (i + 1) / total_paragraphs * 60),
-                "paragraph_current": i + 1,
-                "paragraph_total": total_paragraphs,
-            })
+        final_report = agent.research(query)
 
         publish("engine_progress", {
             "engine": engine_type,
             "status": "finalizing",
-            "message": "正在生成最终报告...",
-            "progress_pct": 90,
+            "message": "研究完成",
+            "progress_pct": 100,
         })
-
-        final_report = agent._generate_final_report()
-        agent._save_report(final_report)
 
         publish("engine_result", {
             "engine": engine_type,

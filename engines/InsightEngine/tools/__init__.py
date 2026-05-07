@@ -12,7 +12,8 @@ from .search import (
 from .keyword_optimizer import (
     KeywordOptimizer,
     KeywordOptimizationResponse,
-    keyword_optimizer
+    keyword_optimizer,
+    get_keyword_optimizer,
 )
 from .sentiment_analyzer import (
     WeiboMultilingualSentimentAnalyzer,
@@ -30,6 +31,7 @@ __all__ = [
     "KeywordOptimizer",
     "KeywordOptimizationResponse",
     "keyword_optimizer",
+    "get_keyword_optimizer",
     "WeiboMultilingualSentimentAnalyzer",
     "SentimentResult",
     "BatchSentimentResult",

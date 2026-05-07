@@ -7,7 +7,7 @@ from openai import OpenAI
 import json
 import sys
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 # 添加项目根目录到Python路径以导入config
@@ -22,7 +22,7 @@ utils_dir = os.path.join(root_dir, 'utils')
 if utils_dir not in sys.path:
     sys.path.append(utils_dir)
 
-from retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
+from app.utils.retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
 
 @dataclass
 class KeywordOptimizationResponse:
@@ -293,5 +293,13 @@ class KeywordOptimizer:
         
         return keywords[:20]
 
-# 全局实例
-keyword_optimizer = KeywordOptimizer()
+# 全局实例（懒加载，避免 import 时因配置缺失而报错）
+keyword_optimizer: Optional[KeywordOptimizer] = None
+
+
+def get_keyword_optimizer() -> KeywordOptimizer:
+    """获取 KeywordOptimizer 单例（懒初始化）。"""
+    global keyword_optimizer
+    if keyword_optimizer is None:
+        keyword_optimizer = KeywordOptimizer()
+    return keyword_optimizer
