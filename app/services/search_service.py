@@ -4,11 +4,13 @@ Publishes progress/results via event_bus SSE.
 """
 
 import threading
+from pathlib import Path
 from typing import Any, Dict, List
 
 from loguru import logger
 
 from app.services.event_bus import publish
+from app.services.forum_service import start_forum_engine
 
 
 OUTPUT_DIRS = {
@@ -17,11 +19,17 @@ OUTPUT_DIRS = {
     'query': 'query_engine_streamlit_reports',
 }
 
+# ForumEngine LogMonitor 尾随的日志文件目录
+_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+
 
 def search_all(query: str):
     """Launch all 3 engine tasks in parallel background threads."""
     if not query.strip():
         return {"success": False, "message": "搜索查询不能为空"}
+
+    # 启动 ForumEngine LogMonitor，开始监控引擎日志文件
+    start_forum_engine()
 
     for engine_type in ['insight', 'media', 'query']:
         t = threading.Thread(
@@ -36,6 +44,17 @@ def search_all(query: str):
 
 def run_engine_task(engine_type: str, query: str):
     """Run an engine agent in the current thread, publishing progress via SSE."""
+    # 添加 loguru 文件 sink，供 ForumEngine LogMonitor 尾随
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _log_file = str(_LOG_DIR / f"{engine_type}.log")
+    _sink_id = logger.add(
+        _log_file,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} - {message}",
+        level="INFO",
+        encoding="utf-8",
+        rotation="10 MB",
+    )
+
     try:
         publish("engine_progress", {
             "engine": engine_type,
@@ -79,6 +98,11 @@ def run_engine_task(engine_type: str, query: str):
             "error": str(exc),
             "traceback": traceback.format_exc(),
         })
+    finally:
+        try:
+            logger.remove(_sink_id)
+        except Exception:
+            pass
 
 
 def _create_agent(engine_type: str):
