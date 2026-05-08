@@ -65,7 +65,7 @@ def _should_continue_reflection(state: MediaGraphState) -> str:
 def _has_more_paragraphs(state: MediaGraphState) -> str:
     idx = state.get("current_paragraph_index", 0)
     paragraphs = state.get("paragraphs", [])
-    if idx + 1 < len(paragraphs):
+    if idx < len(paragraphs):
         return "process_next"
     return "all_done"
 
@@ -329,7 +329,6 @@ def build_media_graph(agent) -> Any:
             logger.info(f"段落处理完成 ({progress:.1f}%)")
             result["paragraphs"] = updated_paragraphs
             result["current_paragraph_index"] = idx + 1
-            result["current_reflection_count"] = 0
 
         return result
 
@@ -398,6 +397,7 @@ def build_media_graph(agent) -> Any:
     graph.add_node("initial_summary", node_initial_summary)
     graph.add_node("reflection_search", node_reflection_search)
     graph.add_node("reflection_summary", node_reflection_summary)
+    graph.add_node("check_more_paragraphs", lambda state: {})
     graph.add_node("format_report", node_format_report)
     graph.add_node("persist_report", node_save_report)
 
@@ -415,8 +415,6 @@ def build_media_graph(agent) -> Any:
             "next_paragraph": "check_more_paragraphs",
         },
     )
-
-    graph.add_node("check_more_paragraphs", lambda state: {})
     graph.add_conditional_edges(
         "check_more_paragraphs",
         _has_more_paragraphs,

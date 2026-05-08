@@ -64,7 +64,7 @@ def _should_continue_reflection(state: QueryGraphState) -> str:
 def _has_more_paragraphs(state: QueryGraphState) -> str:
     idx = state.get("current_paragraph_index", 0)
     paragraphs = state.get("paragraphs", [])
-    if idx + 1 < len(paragraphs):
+    if idx < len(paragraphs):
         return "process_next"
     return "all_done"
 
@@ -317,7 +317,6 @@ def build_query_graph(agent) -> Any:
             logger.info(f"段落处理完成 ({progress:.1f}%)")
             result["paragraphs"] = updated_paragraphs
             result["current_paragraph_index"] = idx + 1
-            result["current_reflection_count"] = 0
 
         return result
 
