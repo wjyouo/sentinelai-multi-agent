@@ -83,7 +83,14 @@ def run_engine_task(engine_type: str, query: str):
 
 def _create_agent(engine_type: str):
     """Instantiate the correct agent class and config for the given engine type."""
-    from config import settings
+    import sys
+    from pathlib import Path
+    _root = Path(__file__).resolve().parent.parent.parent
+    for _p in [str(_root / "engines"), str(_root / "app" / "utils")]:
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+
+    from app.config import settings
 
     if engine_type == 'insight':
         from InsightEngine import DeepSearchAgent, Settings

@@ -59,7 +59,7 @@ def _load_config_module():
 
 def read_config_values() -> Dict[str, str]:
     try:
-        import config as config_module
+        from app import config as config_module
         config_module.reload_settings()
         current_settings = config_module.settings
         values = {}
