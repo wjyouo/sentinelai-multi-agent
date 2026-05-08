@@ -166,3 +166,14 @@ class TestMediaEngineBehavior:
             assert report and isinstance(report, str) and len(report) > 0
         finally:
             llm_patch.stop()
+
+    def test_progress_callback_receives_events(self, agent):
+        """progress_callback 在 research 期间被触发。"""
+        events = []
+        agent.progress_callback = events.append
+        report = agent.research("测试查询")
+        assert report
+        statuses = [e.get("status") for e in events if "status" in e]
+        assert "structure" in statuses
+        assert "processing" in statuses
+        assert "finalizing" in statuses

@@ -141,8 +141,15 @@ def build_query_graph(agent) -> Any:
         编译后的 CompiledStateGraph。
     """
 
+    def _pc(data: dict):
+        """便捷调用 progress_callback。"""
+        cb = getattr(agent, 'progress_callback', None)
+        if cb:
+            cb(data)
+
     def node_generate_structure(state: QueryGraphState) -> dict:
         query = state["query"]
+        _pc({"status": "structure", "message": "正在生成报告结构...", "progress_pct": 10})
         logger.info(f"\n{'=' * 60}")
         logger.info(f"[LangGraph] 生成报告结构: {query}")
 
@@ -167,6 +174,16 @@ def build_query_graph(agent) -> Any:
         idx = state["current_paragraph_index"]
         paragraphs = state["paragraphs"]
         para = paragraphs[idx]
+        total = len(paragraphs)
+
+        pct = int(20 + (idx + 0.3) / total * 60)
+        _pc({
+            "status": "processing",
+            "message": f"处理段落 {idx + 1}/{total}: {para['title']}",
+            "progress_pct": pct,
+            "paragraph_current": idx + 1,
+            "paragraph_total": total,
+        })
 
         logger.info(f"\n[步骤 2.{idx + 1}] 处理段落: {para['title']}")
         logger.info("-" * 50)
@@ -315,12 +332,21 @@ def build_query_graph(agent) -> Any:
             total = len(updated_paragraphs)
             progress = (idx + 1) / total * 100
             logger.info(f"段落处理完成 ({progress:.1f}%)")
+            pct = int(20 + (idx + 1) / total * 60)
+            _pc({
+                "status": "processing",
+                "message": f"段落 {idx + 1}/{total} 完成",
+                "progress_pct": pct,
+                "paragraph_current": idx + 1,
+                "paragraph_total": total,
+            })
             result["paragraphs"] = updated_paragraphs
             result["current_paragraph_index"] = idx + 1
 
         return result
 
     def node_format_report(state: QueryGraphState) -> dict:
+        _pc({"status": "finalizing", "message": "正在生成最终报告...", "progress_pct": 90})
         logger.info(f"\n[步骤 3] 生成最终报告...")
         paragraphs = state["paragraphs"]
 
@@ -346,6 +372,8 @@ def build_query_graph(agent) -> Any:
         }
 
     def node_save_report(state: QueryGraphState) -> dict:
+        _pc({"status": "saving", "message": "正在保存报告...", "progress_pct": 95})
+
         if not state.get("save_report", True):
             return {}
 
