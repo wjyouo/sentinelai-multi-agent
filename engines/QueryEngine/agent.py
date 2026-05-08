@@ -166,7 +166,7 @@ class DeepSearchAgent:
             }
 
             # 执行 LangGraph 图
-            result = self.graph.invoke(initial_state)
+            result = self.graph.invoke(initial_state, {"recursion_limit": 100})
 
             # 同步内部 dataclass state
             self.state.query = query

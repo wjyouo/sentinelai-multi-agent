@@ -438,18 +438,15 @@ class TestInsightEngineBehavior:
             with pytest.raises(RuntimeError):
                 agent.research("测试", save_report=False)
 
-    def test_llm_garbage_still_returns_report(self):
+    def test_llm_garbage_still_returns_report(self, agent):
         """LLM 返回非法内容时仍能产出报告，不崩溃。"""
-        llm_patch = patch(
-            "InsightEngine.llms.base.LLMClient.stream_invoke_to_string",
+        llm_patch = patch.object(
+            agent.llm_client, "stream_invoke_to_string",
             return_value="这是一段无法解析的文本。",
         )
         llm_patch.start()
         try:
-            from InsightEngine import DeepSearchAgent
-            from InsightEngine.utils.config import Settings
-            g_agent = DeepSearchAgent(Settings(OUTPUT_DIR="/tmp/test_insight_reports", **_AGENT_CONFIG))
-            report = g_agent.research("测试", save_report=False)
+            report = agent.research("测试", save_report=False)
             assert report and isinstance(report, str) and len(report) > 0
         finally:
             llm_patch.stop()
