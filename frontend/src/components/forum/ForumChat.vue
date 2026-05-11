@@ -19,7 +19,7 @@
       >
         <span class="msg-agent">{{ msg.agent }}</span>
         <span class="msg-time">{{ msg.timestamp }}</span>
-        <div class="msg-content">{{ msg.content }}</div>
+        <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
       </div>
     </div>
   </div>
@@ -28,9 +28,15 @@
 <script setup lang="ts">
 import { watch, ref, nextTick, onBeforeUnmount } from 'vue'
 import { ChatDotRound, Refresh } from '@element-plus/icons-vue'
+import { marked } from 'marked'
 import { useForumStore } from '@/stores/forum'
 import { useAppsStore } from '@/stores/apps'
 import { usePolling } from '@/composables/usePolling'
+
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  return marked.parse(text, { breaks: true, gfm: true }) as string
+}
 
 const forumStore = useForumStore()
 const appsStore = useAppsStore()
@@ -158,7 +164,29 @@ async function manualRefresh() {
 .msg-content {
   margin-top: 4px;
   font-size: 13px;
-  white-space: pre-wrap;
-  line-height: 1.5;
+  line-height: 1.6;
 }
+.msg-content :deep(p) {
+  margin: 4px 0;
+}
+.msg-content :deep(strong) {
+  font-weight: 600;
+}
+.msg-content :deep(ul), .msg-content :deep(ol) {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+.msg-content :deep(code) {
+  background: #f4f4f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.msg-content :deep(h1), .msg-content :deep(h2), .msg-content :deep(h3) {
+  font-size: 14px;
+  margin: 6px 0 4px;
+}
+.msg-content :deep(h1) { font-size: 15px; }
+.msg-content :deep(h2) { font-size: 14px; }
+.msg-content :deep(h3) { font-size: 13px; }
 </style>

@@ -29,18 +29,22 @@ class InitialSummaryNode:
         cleaned = remove_reasoning_from_output(output)
         cleaned = clean_json_tags(cleaned)
         logger.info(f"  清理后的输出: {cleaned}")
-        publish("summary_ready", {"source": self.ctx.engine_name, "summary": cleaned, "type": "initial"})
         try:
             result = json.loads(cleaned)
             if isinstance(result, dict):
-                return result.get("paragraph_latest_state", cleaned)
+                summary = result.get("paragraph_latest_state", cleaned)
+                publish("summary_ready", {"source": self.ctx.engine_name, "summary": summary, "type": "initial"})
+                return summary
         except json.JSONDecodeError:
             fixed = fix_incomplete_json(cleaned)
             if fixed:
                 try:
                     result = json.loads(fixed)
                     if isinstance(result, dict):
-                        return result.get("paragraph_latest_state", cleaned)
+                        summary = result.get("paragraph_latest_state", cleaned)
+                        publish("summary_ready", {"source": self.ctx.engine_name, "summary": summary, "type": "initial"})
+                        return summary
                 except json.JSONDecodeError:
                     pass
+        publish("summary_ready", {"source": self.ctx.engine_name, "summary": cleaned, "type": "initial"})
         return cleaned
