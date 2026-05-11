@@ -10,6 +10,7 @@ import sys
 import os
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch, MagicMock, PropertyMock
 
@@ -126,9 +127,9 @@ class TestInsightEngineE2E:
         )
         self._llm_patch.start()
 
-        # ── 2. patch 数据库搜索工具 ──
+        # ── 2. patch 数据库搜索工具（移至 InsightContext） ──
         self._search_patch = patch(
-            "InsightEngine.agent.DeepSearchAgent.execute_search_tool",
+            "InsightEngine.context.InsightContext.execute_search",
             return_value=_fake_db_response(3),
         )
         self._search_patch.start()
@@ -140,7 +141,7 @@ class TestInsightEngineE2E:
             reasoning="测试",
         )
         self._ko_patch = patch(
-            "InsightEngine.agent.get_keyword_optimizer",
+            "InsightEngine.context.get_keyword_optimizer",
             return_value=self._ko_mock,
         )
         self._ko_patch.start()
@@ -155,30 +156,38 @@ class TestInsightEngineE2E:
 
         # ── 5. 禁用聚类 ──
         self._cluster_patch = patch(
-            "InsightEngine.agent.ENABLE_CLUSTERING",
+            "InsightEngine.context.ENABLE_CLUSTERING",
             False,
         )
         self._cluster_patch.start()
 
-        # ── 6. 创建 agent 实例 ──
-        from InsightEngine import DeepSearchAgent
+        # ── 6. 创建 run_research 依赖 ──
+        self.progress_callback = None
+        from InsightEngine.agent import run_research
+        from InsightEngine.llms import LLMClient
         from InsightEngine.utils.config import Settings
 
-        self.agent = DeepSearchAgent(Settings(
+        self.config = Settings(
             INSIGHT_ENGINE_API_KEY="sk-test-fake-key",
             INSIGHT_ENGINE_MODEL_NAME="test-model",
             INSIGHT_ENGINE_BASE_URL="https://test.api.com",
-            DB_HOST="localhost",
-            DB_USER="test",
-            DB_PASSWORD="test",
-            DB_NAME="test",
-            DB_PORT=3306,
-            DB_CHARSET="utf8mb4",
-            DB_DIALECT="mysql",
-            MAX_REFLECTIONS=2,
-            MAX_CONTENT_LENGTH=500000,
+            DB_HOST="localhost", DB_USER="test",
+            DB_PASSWORD="test", DB_NAME="test",
+            DB_PORT=3306, DB_CHARSET="utf8mb4", DB_DIALECT="mysql",
+            MAX_REFLECTIONS=2, MAX_CONTENT_LENGTH=500000,
             OUTPUT_DIR="/tmp/test_insight_reports",
-        ))
+        )
+        self.llm_client = LLMClient(
+            api_key=self.config.INSIGHT_ENGINE_API_KEY,
+            model_name=self.config.INSIGHT_ENGINE_MODEL_NAME,
+            base_url=self.config.INSIGHT_ENGINE_BASE_URL,
+        )
+
+        def _research(query, save_report=True):
+            return run_research(query, self.config, self.llm_client,
+                                self.progress_callback, save_report)
+
+        self._research = _research
 
         yield
 
@@ -193,18 +202,20 @@ class TestInsightEngineE2E:
 
     def test_import_chain(self):
         """验证完整的导入链正常。"""
-        from InsightEngine import DeepSearchAgent, create_agent
-        from InsightEngine.graph import build_insight_graph, _execute_search_and_convert
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine import run_research
+        from InsightEngine.graph import build_insight_graph, _should_continue_reflection, _has_more_paragraphs
+        from InsightEngine.state import InsightGraphState
         from InsightEngine.tools import get_keyword_optimizer
-        assert DeepSearchAgent is not None
+        assert run_research is not None
         assert build_insight_graph is not None
         assert InsightGraphState is not None
+        assert _should_continue_reflection is not None
+        assert _has_more_paragraphs is not None
 
     def test_progress_callback_attribute(self):
-        """验证 progress_callback 属性和初始值。"""
-        assert hasattr(self.agent, 'progress_callback')
-        assert self.agent.progress_callback is None
+        """验证 progress_callback 参数可接受 None。"""
+        result = self._research("测试查询", save_report=False)
+        assert result["final_report"]
 
     def test_progress_callback_triggered(self):
         """验证 research() 执行过程中 progress_callback 被按阶段触发。"""
@@ -213,9 +224,9 @@ class TestInsightEngineE2E:
         def _cb(data: dict):
             events.append(data)
 
-        self.agent.progress_callback = _cb
-
-        report = self.agent.research("测试查询")
+        self.progress_callback = _cb
+        result = self._research("测试查询")
+        report = result["final_report"]
 
         # 验证报告被生成
         assert report
@@ -238,7 +249,8 @@ class TestInsightEngineE2E:
 
     def test_research_flow(self):
         """验证完整的 research() 流程产出正确结果。"""
-        report = self.agent.research("测试查询", save_report=False)
+        result = self._research("测试查询", save_report=False)
+        report = result["final_report"]
 
         # 返回非空报告
         assert report
@@ -249,53 +261,51 @@ class TestInsightEngineE2E:
         assert self._llm_call_count >= 10, f"LLM 调用不足: {self._llm_call_count}"
 
     def test_state_sync(self):
-        """验证 research() 后 agent.state 被正确同步（供 _extract_citations 使用）。"""
-        report = self.agent.research("测试查询")
+        """验证 research() 返回结果包含完整段落和搜索历史（供 citations 提取）。"""
+        from InsightEngine.models import Paragraph
 
-        # 基本字段同步
-        assert self.agent.state.query == "测试查询"
-        assert self.agent.state.final_report == report
-        assert self.agent.state.is_completed is True
+        result = self._research("测试查询")
+        report = result["final_report"]
+        paragraphs = result.get("paragraphs", [])
 
-        # 段落同步
-        assert len(self.agent.state.paragraphs) == 2
-        for para in self.agent.state.paragraphs:
+        assert report
+        assert result.get("is_completed") is True
+        assert len(paragraphs) == 2
+
+        for p_dict in paragraphs:
+            para = Paragraph.from_dict(p_dict)
             assert para.title
             assert para.research.latest_summary
             assert para.research.is_completed
-
-        # 搜索历史同步（供 citations 提取）
-        for para in self.agent.state.paragraphs:
             assert len(para.research.search_history) > 0
             for search in para.research.search_history:
                 assert search.query
 
-    def test_dead_code_removed(self):
-        """验证旧顺序方法已删除。"""
-        dead_methods = [
-            '_generate_report_structure',
-            '_process_paragraphs',
-            '_initial_search_and_summary',
-            '_reflection_loop',
-            '_generate_final_report',
-            '_save_report',
-        ]
-        for method in dead_methods:
-            assert not hasattr(self.agent, method), f"旧方法仍存在: {method}"
+    def test_deep_search_agent_removed(self):
+        """验证 DeepSearchAgent 类已从 InsightEngine 中移除。"""
+        import importlib
+        mod = importlib.import_module("InsightEngine")
+        assert not hasattr(mod, "DeepSearchAgent")
+        assert hasattr(mod, "run_research")
 
-    def test_graph_has_pc_helper(self):
-        """验证 graph.py 定义了 _pc 辅助函数。"""
+    def test_graph_uses_node_classes(self):
+        """验证 graph.py 使用新 node classes 构建图。"""
         from InsightEngine.graph import build_insight_graph
         import inspect
         source = inspect.getsource(build_insight_graph)
-        assert "def _pc(data: dict):" in source
-        assert "progress_callback" in source
+        assert "GenerateStructureNode(ctx)" in source
+        assert "InitialSearchNode(ctx)" in source
+        assert "InitialSummaryNode(ctx)" in source
+        assert "ReflectionSearchNode(ctx)" in source
+        assert "ReflectionSummaryNode(ctx)" in source
+        assert "FormatReportNode(ctx)" in source
+        assert "SaveReportNode(ctx)" in source
 
     def test_callbacks_no_error_without_callback(self):
-        """验证未设置 progress_callback 时不会报错。"""
-        assert self.agent.progress_callback is None
-        report = self.agent.research("无回调测试", save_report=False)
-        assert report
+        """验证未传入 progress_callback 时不会报错。"""
+        assert self.progress_callback is None
+        result = self._research("无回调测试", save_report=False)
+        assert result["final_report"]
 
     # test_lazy_keyword_optimizer 已移到 TestLazyKeywordOptimizer
 
@@ -309,7 +319,7 @@ class TestConditionalEdgeFunctions:
     def test_should_continue_reflection_before_max(self):
         """current_reflection_count < max_reflections 时返回 reflect_again。"""
         from InsightEngine.graph import _should_continue_reflection
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine.state import InsightGraphState
 
         s = InsightGraphState(current_reflection_count=0, max_reflections=3)
         assert _should_continue_reflection(s) == "reflect_again"
@@ -320,7 +330,7 @@ class TestConditionalEdgeFunctions:
     def test_should_continue_reflection_at_max(self):
         """current_reflection_count >= max_reflections 时返回 next_paragraph。"""
         from InsightEngine.graph import _should_continue_reflection
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine.state import InsightGraphState
 
         s = InsightGraphState(current_reflection_count=3, max_reflections=3)
         assert _should_continue_reflection(s) == "next_paragraph"
@@ -331,7 +341,7 @@ class TestConditionalEdgeFunctions:
     def test_has_more_paragraphs_before_end(self):
         """current_paragraph_index < len(paragraphs) 时返回 process_next。"""
         from InsightEngine.graph import _has_more_paragraphs
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine.state import InsightGraphState
 
         s = InsightGraphState(current_paragraph_index=0, paragraphs=[{"title": "a"}, {"title": "b"}])
         assert _has_more_paragraphs(s) == "process_next"
@@ -342,7 +352,7 @@ class TestConditionalEdgeFunctions:
     def test_has_more_paragraphs_at_end(self):
         """current_paragraph_index >= len(paragraphs) 时返回 all_done。"""
         from InsightEngine.graph import _has_more_paragraphs
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine.state import InsightGraphState
 
         s = InsightGraphState(current_paragraph_index=2, paragraphs=[{"title": "a"}, {"title": "b"}])
         assert _has_more_paragraphs(s) == "all_done"
@@ -350,7 +360,7 @@ class TestConditionalEdgeFunctions:
     def test_has_more_paragraphs_empty(self):
         """段落列表为空时直接返回 all_done。"""
         from InsightEngine.graph import _has_more_paragraphs
-        from InsightEngine.graph_state import InsightGraphState
+        from InsightEngine.state import InsightGraphState
 
         s = InsightGraphState(current_paragraph_index=0, paragraphs=[])
         assert _has_more_paragraphs(s) == "all_done"
@@ -371,7 +381,7 @@ _AGENT_CONFIG = dict(
 
 @pytest.fixture
 def agent():
-    """创建 mock 好外部依赖的 DeepSearchAgent 实例。每个测试独享一份。"""
+    """创建 mock 好外部依赖的 runner。每个测试独享一份。"""
     llm_responses = list(_MOCK_LLM_RESPONSES)
     call_count = 0
 
@@ -383,22 +393,37 @@ def agent():
 
     patches = [
         patch("InsightEngine.llms.base.LLMClient.stream_invoke_to_string", side_effect=_fake_llm),
-        patch("InsightEngine.agent.DeepSearchAgent.execute_search_tool", return_value=_fake_db_response(3)),
-        patch("InsightEngine.agent.get_keyword_optimizer", return_value=MagicMock(
+        patch("InsightEngine.context.InsightContext.execute_search", return_value=_fake_db_response(3)),
+        patch("InsightEngine.context.get_keyword_optimizer", return_value=MagicMock(
             optimize_keywords=MagicMock(return_value=MagicMock(optimized_keywords=["测试关键词"], reasoning="测试")),
         )),
         patch("InsightEngine.tools.sentiment_analyzer.multilingual_sentiment_analyzer.is_disabled",
               new_callable=PropertyMock, return_value=True),
-        patch("InsightEngine.agent.ENABLE_CLUSTERING", False),
+        patch("InsightEngine.context.ENABLE_CLUSTERING", False),
     ]
     for p in patches:
         p.start()
 
-    from InsightEngine import DeepSearchAgent
+    from InsightEngine.agent import run_research
+    from InsightEngine.llms import LLMClient
     from InsightEngine.utils.config import Settings
-    instance = DeepSearchAgent(Settings(OUTPUT_DIR="/tmp/test_insight_reports", **_AGENT_CONFIG))
 
-    yield instance
+    config = Settings(OUTPUT_DIR="/tmp/test_insight_reports", **_AGENT_CONFIG)
+    llm_client = LLMClient(
+        api_key=config.INSIGHT_ENGINE_API_KEY,
+        model_name=config.INSIGHT_ENGINE_MODEL_NAME,
+        base_url=config.INSIGHT_ENGINE_BASE_URL,
+    )
+
+    runner = SimpleNamespace()
+    runner.config = config
+    runner.llm_client = llm_client
+    runner.progress_callback = None
+    runner.research = lambda query, save_report=True: run_research(
+        query, config, llm_client, runner.progress_callback, save_report,
+    )
+
+    yield runner
 
     for p in patches:
         p.stop()
@@ -409,7 +434,8 @@ class TestInsightEngineBehavior:
 
     def test_research_returns_non_empty_markdown(self, agent):
         """research() 返回非空 Markdown 文本。"""
-        report = agent.research("测试查询", save_report=False)
+        result = agent.research("测试查询", save_report=False)
+        report = result["final_report"]
         assert report
         assert isinstance(report, str)
         assert len(report) > 50
@@ -417,13 +443,14 @@ class TestInsightEngineBehavior:
 
     def test_research_with_chinese_query(self, agent):
         """中文查询正常产出报告。"""
-        report = agent.research("人工智能对教育的影响", save_report=False)
-        assert report and len(report) > 50
+        result = agent.research("人工智能对教育的影响", save_report=False)
+        assert result["final_report"] and len(result["final_report"]) > 50
 
     def test_research_save_report_creates_file(self, agent, tmp_path):
         """save_report=True 时 .md 报告写入磁盘。"""
         agent.config.OUTPUT_DIR = str(tmp_path)
-        report = agent.research("测试保存")
+        result = agent.research("测试保存")
+        report = result["final_report"]
         assert report
         md_files = [f for f in tmp_path.iterdir() if f.suffix == ".md"]
         assert len(md_files) > 0, f"tmp_path 中没有 .md 文件: {list(tmp_path.iterdir())}"
@@ -431,10 +458,10 @@ class TestInsightEngineBehavior:
 
     def test_db_failure_propagates_error(self, agent):
         """数据库查询失败时 research() 抛出异常。"""
-        agent = agent
-        import copy
-        # 在 mock 之上再包一层：让 DB 调用抛出异常
-        with patch.object(agent, "execute_search_tool", side_effect=RuntimeError("DB unreachable")):
+        with patch(
+            "InsightEngine.context.InsightContext.execute_search",
+            side_effect=RuntimeError("DB unreachable"),
+        ):
             with pytest.raises(RuntimeError):
                 agent.research("测试", save_report=False)
 
@@ -446,8 +473,8 @@ class TestInsightEngineBehavior:
         )
         llm_patch.start()
         try:
-            report = agent.research("测试", save_report=False)
-            assert report and isinstance(report, str) and len(report) > 0
+            result = agent.research("测试", save_report=False)
+            assert result["final_report"] and isinstance(result["final_report"], str) and len(result["final_report"]) > 0
         finally:
             llm_patch.stop()
 
@@ -455,8 +482,8 @@ class TestInsightEngineBehavior:
         """progress_callback 在 research 期间被触发。"""
         events = []
         agent.progress_callback = events.append
-        report = agent.research("测试查询")
-        assert report
+        result = agent.research("测试查询")
+        assert result["final_report"]
         statuses = [e.get("status") for e in events if "status" in e]
         # 验证关键阶段事件被触发
         assert "structure" in statuses

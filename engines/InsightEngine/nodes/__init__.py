@@ -1,20 +1,24 @@
 """
-节点处理模块
-实现Deep Search Agent的各个处理步骤
+LangGraph node classes for InsightEngine.
+
+Each class implements __call__(state) -> dict and is registered
+directly as a LangGraph node in build_insight_graph().
 """
 
-from .base_node import BaseNode
-from .report_structure_node import ReportStructureNode
-from .search_node import FirstSearchNode, ReflectionNode
-from .summary_node import FirstSummaryNode, ReflectionSummaryNode
-from .formatting_node import ReportFormattingNode
+from .generate_structure import GenerateStructureNode
+from .initial_search import InitialSearchNode
+from .initial_summary import InitialSummaryNode
+from .reflection_search import ReflectionSearchNode
+from .reflection_summary import ReflectionSummaryNode
+from .format_report import FormatReportNode
+from .save_report import SaveReportNode
 
 __all__ = [
-    "BaseNode",
-    "ReportStructureNode",
-    "FirstSearchNode",
-    "ReflectionNode", 
-    "FirstSummaryNode",
+    "GenerateStructureNode",
+    "InitialSearchNode",
+    "InitialSummaryNode",
+    "ReflectionSearchNode",
     "ReflectionSummaryNode",
-    "ReportFormattingNode"
+    "FormatReportNode",
+    "SaveReportNode",
 ]
