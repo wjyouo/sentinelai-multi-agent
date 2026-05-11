@@ -116,12 +116,6 @@ async def generate_report(request: Request):
 
         svc.clear_report_log()
 
-        if not svc.report_agent:
-            return JSONResponse(
-                content={"success": False, "error": "Report Engine未初始化"},
-                status_code=500,
-            )
-
         engines_status = svc.check_engines_ready()
         if not engines_status["ready"]:
             return JSONResponse(
@@ -308,11 +302,6 @@ def cancel_task(task_id: str):
 @router.get("/templates")
 def get_templates():
     try:
-        if not svc.report_agent:
-            return JSONResponse(
-                content={"success": False, "error": "Report Engine未初始化"},
-                status_code=500,
-            )
         data = svc.get_templates_list()
         return JSONResponse(content={"success": True, **data})
     except Exception as e:
