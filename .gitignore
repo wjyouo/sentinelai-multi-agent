@@ -28,14 +28,8 @@ env/
 logs/
 *.log
 
-# Output reports
-final_reports/
-insight_reports/
-media_reports/
-query_reports/
-insight_engine_streamlit_reports/
-media_engine_streamlit_reports/
-query_engine_streamlit_reports/
+# Output reports & data
+data/
 # OS
 Thumbs.db
 
@@ -48,3 +42,4 @@ Thumbs.db
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/*_engine_streamlit_reports/
