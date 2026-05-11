@@ -7,7 +7,7 @@ Report Engine节点基类。
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from ..llms.base import LLMClient
-from ..state.state import ReportState
+from ..models.state import ReportState
 from loguru import logger
 
 class BaseNode(ABC):

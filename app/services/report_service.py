@@ -38,7 +38,6 @@ LOG_STREAM_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 # ── Global state ───────────────────────────────────────────────────────────
 
-report_agent = None
 current_task: Optional["ReportTask"] = None
 task_lock = threading.Lock()
 stream_lock = threading.Lock()
@@ -268,21 +267,15 @@ class ReportTask:
 # ── Engine initialization ──────────────────────────────────────────────────
 
 def initialize_report_engine() -> bool:
-    """Initialize ReportEngine (idempotent). Returns True on success."""
-    global report_agent
+    """Initialize ReportEngine log forwarder (idempotent)."""
     try:
-        from ReportEngine.agent import create_agent
-
-        report_agent = create_agent()
-        logger.info("Report Engine初始化成功")
         _setup_log_stream_forwarder()
-
         try:
             from ReportEngine.utils.dependency_check import log_dependency_status
             log_dependency_status()
         except Exception as dep_err:
             logger.warning(f"依赖检测失败: {dep_err}")
-
+        logger.info("Report Engine初始化成功")
         return True
     except Exception as e:
         logger.exception(f"Report Engine初始化失败: {str(e)}")
@@ -292,6 +285,8 @@ def initialize_report_engine() -> bool:
 # ── Input file checks ──────────────────────────────────────────────────────
 
 def check_engines_ready() -> Dict[str, Any]:
+    """Check if input files from all engines are ready."""
+    import os
     directories = {
         "insight": "insight_engine_streamlit_reports",
         "media": "media_engine_streamlit_reports",
@@ -299,15 +294,57 @@ def check_engines_ready() -> Dict[str, Any]:
     }
     forum_log_path = "logs/forum.log"
 
-    if not report_agent:
-        return {"ready": False, "error": "Report Engine未初始化"}
+    files_found, missing_files = [], []
+    latest_files: Dict[str, str] = {}
+    has_any_engine = False
 
-    return report_agent.check_input_files(
-        directories["insight"],
-        directories["media"],
-        directories["query"],
-        forum_log_path,
-    )
+    for engine, directory in directories.items():
+        if os.path.exists(directory):
+            md_files = [f for f in os.listdir(directory) if f.endswith('.md')]
+            if md_files:
+                files_found.append(f"{engine}: {len(md_files)} 个文件")
+                latest = max(md_files, key=lambda x: os.path.getmtime(os.path.join(directory, x)))
+                latest_files[engine] = os.path.join(directory, latest)
+                has_any_engine = True
+            else:
+                missing_files.append(f"{engine}: 目录中没有 .md 文件")
+        else:
+            missing_files.append(f"{engine}: 目录不存在")
+
+    forum_ready = os.path.exists(forum_log_path)
+    if forum_ready:
+        files_found.append(f"forum: {os.path.basename(forum_log_path)}")
+        latest_files['forum'] = forum_log_path
+    else:
+        missing_files.append("forum: 日志文件不存在")
+
+    return {
+        'ready': has_any_engine and forum_ready,
+        'files_found': files_found,
+        'missing_files': missing_files,
+        'latest_files': latest_files,
+    }
+
+
+def _load_input_files(file_paths: Dict[str, str]) -> Dict[str, Any]:
+    """Load engine report files and forum log content."""
+    content: Dict[str, Any] = {'reports': [], 'forum_logs': ''}
+    for engine in ['query', 'media', 'insight']:
+        if engine in file_paths:
+            try:
+                with open(file_paths[engine], 'r', encoding='utf-8') as f:
+                    content['reports'].append(f.read())
+            except Exception:
+                content['reports'].append("")
+        else:
+            content['reports'].append("")
+    if 'forum' in file_paths:
+        try:
+            with open(file_paths['forum'], 'r', encoding='utf-8') as f:
+                content['forum_logs'] = f.read()
+        except Exception:
+            pass
+    return content
 
 
 # ── Report generation (background thread) ─────────────────────────────────
@@ -334,12 +371,14 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
 
         task.publish_event("stage", {"message": "输入文件检查通过，准备载入内容", "stage": "io_ready"})
 
+        from ReportEngine.agent import generate_report
+
         latest_files = check_result.get("latest_files", {})
-        content = report_agent.load_input_files(latest_files)
+        content = _load_input_files(latest_files)
 
         task.publish_event("stage", {"message": "源数据加载完成，启动生成流程", "stage": "data_loaded"})
 
-        generation_result = report_agent.generate_report(
+        generation_result = generate_report(
             query=query,
             reports=content.get("reports", []),
             forum_logs=content.get("forum_logs", ""),
@@ -462,7 +501,7 @@ def get_status_dict() -> Dict[str, Any]:
     with task_lock:
         task_dict = current_task.to_dict() if current_task else None
     return {
-        "initialized": report_agent is not None,
+        "initialized": True,
         "engines_ready": engines_status["ready"],
         "files_found": engines_status.get("files_found", []),
         "missing_files": engines_status.get("missing_files", []),

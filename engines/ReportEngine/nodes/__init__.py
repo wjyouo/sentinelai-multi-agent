@@ -1,31 +1,33 @@
 """
-Report Engine节点处理模块。
-
-封装模板选择、章节生成、文档布局、篇幅规划等流水线节点。
+LangGraph node classes for ReportEngine.
+Business-logic nodes (TemplateSelectionNode, etc.) remain in their original modules.
 """
 
-from .base_node import BaseNode, StateMutationNode
+from .normalize_reports import NormalizeReportsNode
+from .select_template import SelectTemplateNode
+from .slice_template import SliceTemplateNode
+from .design_layout import DesignLayoutNode
+from .plan_budget import PlanBudgetNode
+from .build_context import BuildContextNode
+from .build_graphrag import BuildGraphRagNode
+from .generate_chapters import GenerateChaptersNode
+from .compose_document import ComposeDocumentNode
+from .render_html import RenderHtmlNode
+from .save_report import SaveReportNode
+
+# Re-export business-logic node classes for backward compatibility
 from .template_selection_node import TemplateSelectionNode
-from .chapter_generation_node import (
-    ChapterGenerationNode,
-    ChapterJsonParseError,
-    ChapterContentError,
-    ChapterValidationError,
-)
+from .chapter_generation_node import ChapterGenerationNode, ChapterJsonParseError, ChapterContentError, ChapterValidationError
 from .document_layout_node import DocumentLayoutNode
 from .word_budget_node import WordBudgetNode
-from .graphrag_query_node import GraphRAGQueryNode, QueryHistory
+from .graphrag_query_node import GraphRAGQueryNode
 
 __all__ = [
-    "BaseNode",
-    "StateMutationNode",
-    "TemplateSelectionNode",
-    "ChapterGenerationNode",
-    "ChapterJsonParseError",
-    "ChapterContentError",
-    "ChapterValidationError",
-    "DocumentLayoutNode",
-    "WordBudgetNode",
-    "GraphRAGQueryNode",
-    "QueryHistory",
+    "NormalizeReportsNode", "SelectTemplateNode", "SliceTemplateNode",
+    "DesignLayoutNode", "PlanBudgetNode", "BuildContextNode",
+    "BuildGraphRagNode", "GenerateChaptersNode", "ComposeDocumentNode",
+    "RenderHtmlNode", "SaveReportNode",
+    "TemplateSelectionNode", "ChapterGenerationNode", "ChapterJsonParseError",
+    "ChapterContentError", "ChapterValidationError", "DocumentLayoutNode",
+    "WordBudgetNode", "GraphRAGQueryNode",
 ]

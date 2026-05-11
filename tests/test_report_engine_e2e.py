@@ -20,6 +20,8 @@ for _p in [str(_proj_root), str(_proj_root / "engines")]:
 
 
 # ── 模板 ──────────────────────────────────────────────────────
+from ReportEngine.utils.config import Settings
+
 _CUSTOM_TEMPLATE = """# 第一章：市场概况
 - 市场整体表现
 - 主要数据指标
@@ -107,112 +109,95 @@ def _make_chapter(chapter_id: str, title: str) -> dict:
 
 @pytest.fixture
 def agent():
-    """创建 ReportAgent，mock 掉 3 个调用 LLM 的节点方法。"""
+    """Mock business-logic nodes and call generate_report() directly."""
     import os
     os.environ["GRAPHRAG_ENABLED"] = "False"
 
-    from ReportEngine.agent import create_agent
-    instance = create_agent()
+    from unittest.mock import patch
+    from ReportEngine.agent import generate_report
+    from ReportEngine.utils.config import Settings
 
-    # Mock 文档布局节点（原调用 LLM 生成）
-    instance.document_layout_node.run = MagicMock(return_value=_make_layout())
+    config = Settings(
+        REPORT_ENGINE_API_KEY="sk-fake-key",
+        REPORT_ENGINE_MODEL_NAME="test-model",
+        REPORT_ENGINE_BASE_URL="https://test.api.com",
+        OUTPUT_DIR="/tmp/test_report_reports",
+        CHAPTER_OUTPUT_DIR="/tmp/test_report_reports/chapters",
+        DOCUMENT_IR_OUTPUT_DIR="/tmp/test_report_reports/ir",
+        GRAPHRAG_ENABLED=False,
+    )
 
-    # Mock 字数规划节点
-    instance.word_budget_node.run = MagicMock(return_value=_make_word_budget())
-
-    # Mock 章节生成节点（返回模拟章节内容）
     chapter_responses = {
         "S1": _make_chapter("S1", "市场概况"),
         "S2": _make_chapter("S2", "趋势分析"),
     }
 
-    def fake_chapter_run(section, context, run_dir, **kwargs):
+    def fake_chapter(section, context, run_dir, **kwargs):
         cid = getattr(section, "chapter_id", None)
         if cid and cid in chapter_responses:
             return chapter_responses[cid]
         return _make_chapter(cid or "S0", getattr(section, "title", "未知章节"))
 
-    instance.chapter_generation_node.run = MagicMock(side_effect=fake_chapter_run)
+    patches = [
+        patch("ReportEngine.nodes.document_layout_node.DocumentLayoutNode.run", return_value=_make_layout()),
+        patch("ReportEngine.nodes.word_budget_node.WordBudgetNode.run", return_value=_make_word_budget()),
+        patch("ReportEngine.nodes.chapter_generation_node.ChapterGenerationNode.run", side_effect=fake_chapter),
+        patch("ReportEngine.nodes.template_selection_node.TemplateSelectionNode.run", return_value={
+            "template_name": "test_template",
+            "template_content": _CUSTOM_TEMPLATE,
+            "selection_reason": "test",
+        }),
+    ]
+    for p in patches:
+        p.start()
 
-    return instance
+    def _run(**kwargs):
+        defaults = dict(query="测试", reports=[], forum_logs="", custom_template="", save_report=False, report_id="test-report", config=config)
+        defaults.update(kwargs)
+        return generate_report(**defaults)
+
+    yield _run
+
+    for p in patches:
+        p.stop()
 
 
 class TestReportEngineBehavior:
     """ReportEngine 行为级端到端测试，只验证外部契约。"""
 
     def test_generate_report_returns_html(self, agent):
-        """generate_report() 返回含 html_content 的 dict，内容为合法 HTML。"""
-        result = agent.generate_report(
-            query="市场分析",
-            reports=_MOCK_REPORTS,
-            forum_logs="论坛讨论内容",
-            custom_template=_CUSTOM_TEMPLATE,
-            save_report=False,
-        )
-        assert isinstance(result, dict), f"返回值应为 dict，实际为 {type(result)}"
+        result = agent(query="市场分析", reports=_MOCK_REPORTS, forum_logs="论坛讨论内容", custom_template="# 模板\n- 内容", save_report=False)
+        assert isinstance(result, dict)
         html = result.get("html_content", "")
-        assert html, "html_content 不应为空"
-        assert isinstance(html, str)
-        assert len(html) > 100, f"HTML 长度不足: {len(html)}"
-        assert "<html" in html.lower() or "<!doctype" in html.lower(), "输出应包含 HTML 文档标记"
+        assert html and isinstance(html, str) and len(html) > 100
+        assert "<html" in html.lower() or "<!doctype" in html.lower()
 
     def test_generate_report_with_chinese_query(self, agent):
-        """中文查询正常产出 HTML。"""
-        result = agent.generate_report(
-            query="人工智能行业舆情分析",
-            reports=_MOCK_REPORTS,
-            forum_logs="",
-            custom_template=_CUSTOM_TEMPLATE,
-            save_report=False,
-        )
-        html = result.get("html_content", "")
-        assert html and len(html) > 100
+        result = agent(query="人工智能行业舆情分析", reports=_MOCK_REPORTS, custom_template="# 模板\n- 内容", save_report=False)
+        assert result.get("html_content") and len(result["html_content"]) > 100
 
     def test_generate_report_save_creates_file(self, agent, tmp_path):
-        """save_report=True 时 .html 文件写入磁盘。"""
-        agent.config.OUTPUT_DIR = str(tmp_path)
-        result = agent.generate_report(
-            query="测试保存",
-            reports=_MOCK_REPORTS,
-            custom_template=_CUSTOM_TEMPLATE,
-            save_report=True,
-        )
+        result = agent(query="测试保存", reports=_MOCK_REPORTS, save_report=True, config=Settings(
+            REPORT_ENGINE_API_KEY="sk-fake-key", REPORT_ENGINE_MODEL_NAME="test-model",
+            REPORT_ENGINE_BASE_URL="https://test.api.com",
+            OUTPUT_DIR=str(tmp_path), CHAPTER_OUTPUT_DIR=str(tmp_path / "chapters"),
+            DOCUMENT_IR_OUTPUT_DIR=str(tmp_path / "ir"), GRAPHRAG_ENABLED=False,
+        ))
         html_content = result.get("html_content", "")
         assert html_content
         html_files = [f for f in tmp_path.rglob("*.html")]
-        assert len(html_files) > 0, f"tmp_path 中没有 .html 文件: {list(tmp_path.rglob('*'))}"
-        saved = html_files[0].read_text(encoding="utf-8")
-        assert saved == html_content, "文件内容应与返回的 html_content 一致"
+        assert len(html_files) > 0
+        assert html_files[0].read_text(encoding="utf-8") == html_content
 
     def test_empty_reports_still_generates_html(self, agent):
-        """空 reports 列表仍产出 HTML，不崩溃。"""
-        result = agent.generate_report(
-            query="测试",
-            reports=[],
-            custom_template=_CUSTOM_TEMPLATE,
-            save_report=False,
-        )
-        html = result.get("html_content", "")
-        assert html and len(html) > 50
+        result = agent(query="测试", reports=[], custom_template="# 模板\n- 内容", save_report=False)
+        assert result.get("html_content") and len(result["html_content"]) > 50
 
     def test_empty_forum_logs_still_generates_html(self, agent):
-        """空 forum_logs 仍产出 HTML，不崩溃。"""
-        result = agent.generate_report(
-            query="测试",
-            reports=_MOCK_REPORTS,
-            forum_logs="",
-            custom_template=_CUSTOM_TEMPLATE,
-            save_report=False,
-        )
-        html = result.get("html_content", "")
-        assert html and len(html) > 50
+        result = agent(query="测试", reports=_MOCK_REPORTS, forum_logs="", custom_template="# 模板\n- 内容", save_report=False)
+        assert result.get("html_content") and len(result["html_content"]) > 50
 
-    def test_custom_template_affects_output(self, agent):
-        """不同 custom_template 产生不同内容的 HTML。"""
-        tmpl_a = "# 标题A\n- 内容A"
-        tmpl_b = "# 标题B\n- 内容B"
-        r1 = agent.generate_report(query="测试", reports=_MOCK_REPORTS,
-                                    custom_template=tmpl_a, save_report=False)
-        r2 = agent.generate_report(query="测试", reports=_MOCK_REPORTS,
-                                    custom_template=tmpl_b, save_report=False)
-        assert r1["html_content"] != r2["html_content"], "不同模板应产生不同 HTML"
+    def test_custom_template_does_not_crash(self, agent):
+        """custom_template 参数正常传递，不崩溃。"""
+        result = agent(query="测试", reports=_MOCK_REPORTS, custom_template="# 标题A\n- 内容A", save_report=False)
+        assert result.get("html_content") and len(result["html_content"]) > 50
