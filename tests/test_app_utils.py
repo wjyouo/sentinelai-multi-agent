@@ -264,62 +264,62 @@ SAMPLE_LOG_LINES = [
 
 
 class TestGetLatestHostSpeech:
-    """get_latest_host_speech 函数"""
+    """get_latest_host_speech 函数（从 EventBus 内存缓存读取）"""
 
-    def test_found(self):
+    @staticmethod
+    def _set_cache(value):
+        import app.utils.forum_reader as fr
+        with fr._cache_lock:
+            fr._latest_host_speech = value
+
+    def test_returns_cached_speech(self):
         from app.utils.forum_reader import get_latest_host_speech
-        m = mock_open(read_data="".join(SAMPLE_LOG_LINES))
-        with patch("app.utils.forum_reader.Path.exists", return_value=True):
-            with patch("builtins.open", m):
-                result = get_latest_host_speech(log_dir="/tmp/logs")
 
-        assert result is not None
-        assert "这是HOST发言2" in result
+        self._set_cache("这是一条HOST发言")
+        try:
+            assert get_latest_host_speech() == "这是一条HOST发言"
+        finally:
+            self._set_cache(None)
 
-    def test_file_not_exists(self):
+    def test_returns_none_when_cache_empty(self):
         from app.utils.forum_reader import get_latest_host_speech
-        with patch("app.utils.forum_reader.Path.exists", return_value=False):
-            result = get_latest_host_speech(log_dir="/tmp/logs")
 
-        assert result is None
+        self._set_cache(None)
+        assert get_latest_host_speech() is None
 
-    def test_no_host_speech(self):
-        from app.utils.forum_reader import get_latest_host_speech
-        m = mock_open(read_data="[10:00:00] [INSIGHT] only agent\n")
-        with patch("app.utils.forum_reader.Path.exists", return_value=True):
-            with patch("builtins.open", m):
-                result = get_latest_host_speech(log_dir="/tmp/logs")
+    def test_eventbus_subscriber_updates_cache(self):
+        import app.utils.forum_reader as fr
 
-        assert result is None
+        self._set_cache(None)
+        try:
+            fr._on_forum_message("forum_message", {"type": "host", "content": "新的HOST发言"})
+            with fr._cache_lock:
+                assert fr._latest_host_speech == "新的HOST发言"
+        finally:
+            self._set_cache(None)
 
-    def test_empty_file(self):
-        from app.utils.forum_reader import get_latest_host_speech
-        m = mock_open(read_data="")
-        with patch("app.utils.forum_reader.Path.exists", return_value=True):
-            with patch("builtins.open", m):
-                result = get_latest_host_speech(log_dir="/tmp/logs")
+    def test_ignores_non_host_messages(self):
+        import app.utils.forum_reader as fr
 
-        assert result is None
+        self._set_cache("已有发言")
+        try:
+            fr._on_forum_message("forum_message", {"type": "agent", "content": "不是HOST"})
+            fr._on_forum_message("summary_ready", {"summary": "也不是HOST"})
+            with fr._cache_lock:
+                assert fr._latest_host_speech == "已有发言"
+        finally:
+            self._set_cache(None)
 
-    def test_escaped_newlines(self):
-        from app.utils.forum_reader import get_latest_host_speech
-        lines = ['[10:00:00] [HOST] line1\\nline2\\nline3\n']
-        m = mock_open(read_data="".join(lines))
-        with patch("app.utils.forum_reader.Path.exists", return_value=True):
-            with patch("builtins.open", m):
-                result = get_latest_host_speech(log_dir="/tmp/logs")
+    def test_ignores_empty_content(self):
+        import app.utils.forum_reader as fr
 
-        assert result is not None
-        assert "\n" in result
-        assert "\\n" not in result
-
-    def test_read_exception(self):
-        from app.utils.forum_reader import get_latest_host_speech
-        with patch("app.utils.forum_reader.Path.exists", return_value=True):
-            with patch("builtins.open", side_effect=PermissionError("denied")):
-                result = get_latest_host_speech(log_dir="/tmp/logs")
-
-        assert result is None
+        self._set_cache("已有发言")
+        try:
+            fr._on_forum_message("forum_message", {"type": "host", "content": ""})
+            with fr._cache_lock:
+                assert fr._latest_host_speech == "已有发言"
+        finally:
+            self._set_cache(None)
 
 
 class TestGetAllHostSpeeches:

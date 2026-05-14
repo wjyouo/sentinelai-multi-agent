@@ -2,7 +2,7 @@
 Forum日志读取工具
 用于读取forum.log中的最新HOST发言
 
-优先通过 EventBus 订阅获取（内存缓存），文件读取作为兜底。
+通过 EventBus 订阅实时缓存 HOST 发言，避免每次读取文件。
 """
 
 import re
@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from loguru import logger
 
+from app.services.event_bus import subscribe
+
 # ── EventBus-backed cache ──────────────────────────────────────────
 
 _latest_host_speech: Optional[str] = None
 _cache_lock = threading.Lock()
-_subscribed = False
 
 
 def _on_forum_message(event_type: str, data: dict):
@@ -28,63 +29,24 @@ def _on_forum_message(event_type: str, data: dict):
                 _latest_host_speech = content
 
 
-def _ensure_subscribed():
-    """Lazy-register the EventBus subscriber (avoids import-time circular deps)."""
-    global _subscribed
-    if not _subscribed:
-        from app.services.event_bus import subscribe
-        subscribe(_on_forum_message)
-        _subscribed = True
+# 模块加载时注册，确保不会错过任何 HOST 发言
+subscribe(_on_forum_message)
 
 
 # ── Public API ─────────────────────────────────────────────────────
 
 def get_latest_host_speech(log_dir: str = "logs") -> Optional[str]:
     """
-    获取最新的HOST发言。优先使用 EventBus 内存缓存，缓存为空时回退到文件读取。
+    获取最新的HOST发言（从 EventBus 内存缓存读取）。
 
     Args:
-        log_dir: 日志目录路径（仅文件回退时使用）
+        log_dir: 日志目录路径（保留参数兼容性，当前不再使用）
 
     Returns:
         最新的HOST发言内容，如果没有则返回None
     """
-    _ensure_subscribed()
-
-    # 优先读 EventBus 缓存
     with _cache_lock:
-        cached = _latest_host_speech
-    if cached is not None:
-        return cached
-
-    # 回退：文件读取（兼容 EventBus 尚未收到消息的场景）
-    try:
-        forum_log_path = Path(log_dir) / "forum.log"
-
-        if not forum_log_path.exists():
-            logger.debug("forum.log文件不存在")
-            return None
-
-        with open(forum_log_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
-
-        host_speech = None
-        for line in reversed(lines):
-            match = re.match(r'\[(\d{2}:\d{2}:\d{2})\]\s*\[HOST\]\s*(.+)', line)
-            if match:
-                _, content = match.groups()
-                host_speech = content.replace('\\n', '\n').strip()
-                break
-
-        if host_speech:
-            logger.info(f"找到最新的HOST发言（文件读取），长度: {len(host_speech)}字符")
-        else:
-            logger.debug("未找到HOST发言")
-        return host_speech
-
-    except Exception as e:
-        logger.error(f"读取forum.log失败: {str(e)}")
-        return None
+        return _latest_host_speech
 
 
 def get_all_host_speeches(log_dir: str = "logs") -> List[Dict[str, str]]:
