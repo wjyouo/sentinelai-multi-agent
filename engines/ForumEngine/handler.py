@@ -15,12 +15,8 @@ from loguru import logger
 
 from app.services.event_bus import publish, subscribe, unsubscribe
 from app.services.event_types import EventType
+from engines.ForumEngine.llm_host import generate_host_speech
 
-try:
-    from .llm_host import generate_host_speech
-    _HOST_AVAILABLE = True
-except ImportError:
-    _HOST_AVAILABLE = False
 
 
 class ForumEventHandler:
@@ -58,19 +54,17 @@ class ForumEventHandler:
         if not summary:
             return
 
+        should_trigger = False
         with self._lock:
             if not self.is_active:
                 self._start_session()
 
-            # Write to forum.log (kept for GraphRAG ForumParser)
             self._write_forum_log(summary, source.upper())
 
-            # Buffer for HOST speech trigger
             timestamp = datetime.now().strftime('%H:%M:%S')
             log_line = f"[{timestamp}] [{source.upper()}] {summary}"
             self.buffer.append(log_line)
 
-            # Publish forum_message for SSE
             publish(EventType.FORUM_MESSAGE, {
                 "type": "agent",
                 "sender": f"{source.title()} Engine",
@@ -78,9 +72,12 @@ class ForumEventHandler:
                 "source": source,
             })
 
-            # Trigger HOST every 5 speeches
             if len(self.buffer) >= 5 and not self.is_host_generating:
-                self._trigger_host()
+                should_trigger = True
+
+        # 在锁外触发 HOST，避免 _trigger_host 内部再次获取 _lock 导致死锁
+        if should_trigger:
+            self._trigger_host()
 
     def _start_session(self):
         """Begin a new forum session."""
@@ -101,13 +98,16 @@ class ForumEventHandler:
 
     def _trigger_host(self):
         """Generate HOST speech via LLM and publish it."""
-        if not _HOST_AVAILABLE or self.is_host_generating:
-            return
-        self.is_host_generating = True
+        with self._lock:
+            if self.is_host_generating:
+                return
+            self.is_host_generating = True
+            if len(self.buffer) < 5:
+                self.is_host_generating = False
+                return
+
         try:
             recent = self.buffer[-5:]
-            if len(recent) < 5:
-                return
             logger.info("ForumEngine: 正在生成主持人发言...")
             speech = generate_host_speech(recent)
             if speech:
@@ -117,7 +117,6 @@ class ForumEventHandler:
                     "sender": "Forum Host",
                     "content": speech,
                 })
-                # Remove the 5 processed speeches from buffer
                 with self._lock:
                     self.buffer = self.buffer[5:]
         except Exception as e:
