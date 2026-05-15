@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     # Bocha 兼容键（别名）
     BOCHA_API_KEY: Optional[str] = Field(None, description="Bocha 兼容键（别名）")
     
+    # 只有配置了这个属性，才能够自动加载.env文件
     model_config = ConfigDict(
         env_file=ENV_FILE,
         env_prefix="",

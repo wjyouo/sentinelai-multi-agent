@@ -1,4 +1,9 @@
-"""QueryContext — dependency container for QueryEngine graph."""
+"""QueryContext — dependency container for QueryEngine graph.
+
+QueryEngine 定位：权威信息核查引擎
+- 使用 Bocha 搜索，LLM 提示词侧重官方来源、数据核查、事实验证
+- 与 MediaEngine 使用相同的搜索后端，但通过提示词实现角色差异化
+"""
 
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
@@ -19,20 +24,17 @@ class QueryContext:
     def execute_search(self, tool_name: str, query: str, **kwargs) -> Any:
         logger.info(f"  → 执行搜索工具: {tool_name}")
         dispatch = {
-            "basic_search_news": lambda: self.search_agency.basic_search_news(query, kwargs.get("max_results", 7)),
-            "deep_search_news": lambda: self.search_agency.deep_search_news(query),
-            "search_news_last_24_hours": lambda: self.search_agency.search_news_last_24_hours(query),
-            "search_news_last_week": lambda: self.search_agency.search_news_last_week(query),
-            "search_images_for_news": lambda: self.search_agency.search_images_for_news(query),
-            "search_news_by_date": lambda: self.search_agency.search_news_by_date(
-                query, kwargs["start_date"], kwargs["end_date"],
-            ),
+            "comprehensive_search": lambda: self.search_agency.comprehensive_search(query, kwargs.get("max_results", 10)),
+            "web_search_only": lambda: self.search_agency.web_search_only(query, kwargs.get("max_results", 15)),
+            "search_for_structured_data": lambda: self.search_agency.search_for_structured_data(query),
+            "search_last_24_hours": lambda: self.search_agency.search_last_24_hours(query),
+            "search_last_week": lambda: self.search_agency.search_last_week(query),
         }
         fn = dispatch.get(tool_name)
         if fn:
             return fn()
-        logger.warning(f"未知搜索工具: {tool_name}，使用默认基础搜索")
-        return self.search_agency.basic_search_news(query)
+        logger.warning(f"未知搜索工具: {tool_name}，使用默认综合搜索")
+        return self.search_agency.comprehensive_search(query)
 
     @staticmethod
     def validate_date_format(date_str: str) -> bool:

@@ -23,6 +23,8 @@
 import os
 import json
 import sys
+import sys
+sys.path.insert(0,"/home/m1881/pycharm_projects/Atguigu_SentinelAI")
 import datetime
 from typing import List, Dict, Any, Optional, Literal
 
@@ -35,14 +37,8 @@ try:
 except ImportError:
     raise ImportError("requests 库未安装，请运行 `pip install requests` 进行安装。")
 
-# 添加utils目录到Python路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.dirname(os.path.dirname(current_dir))
-utils_dir = os.path.join(root_dir, 'utils')
-if utils_dir not in sys.path:
-    sys.path.append(utils_dir)
 
-from retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
+from app.utils.retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
 
 # --- 1. 数据结构定义 ---
 from dataclasses import dataclass, field
@@ -400,11 +396,17 @@ class TavilySearchWrapper:
         kwargs.setdefault('topic', 'general')
         resp = self._client.search(**{k: v for k, v in kwargs.items() if v is not None})
         webpages = [self._to_webpage(r) for r in resp.get('results', [])]
-        return BochaResponse(query=resp.get('query', ''), webpages=webpages)
+        return BochaResponse(
+            query=resp.get('query', ''),
+            answer=resp.get('answer') or '',
+            webpages=webpages,
+            follow_ups=resp.get('follow_up_questions') or [],
+        )
 
     def comprehensive_search(self, query: str, max_results: int = 10) -> BochaResponse:
         logger.info(f"--- TOOL: Tavily综合搜索 (query: {query}) ---")
-        return self._search(query=query, max_results=max_results, search_depth="basic")
+        return self._search(query=query, max_results=max_results, search_depth="basic",
+                            include_answer=True)
 
     def web_search_only(self, query: str, max_results: int = 15) -> BochaResponse:
         logger.info(f"--- TOOL: Tavily纯网页搜索 (query: {query}) ---")
@@ -479,7 +481,8 @@ if __name__ == "__main__":
         search_client = load_agent_from_config()
 
         # 场景1: Agent进行一次常规的、需要AI总结的综合搜索
-        response1 = search_client.comprehensive_search(query="人工智能对未来教育的影响")
+        response1 = search_client.comprehensive_search(query="特朗普访华15号日程")
+        print(response1)
         print_response_summary(response1)
 
         # 场景2: Agent需要查询特定结构化信息 - 天气
@@ -497,16 +500,16 @@ if __name__ == "__main__":
             print_response_summary(response3)
 
         # 场景4: Agent需要追踪某个事件的最新进展
-        response4 = search_client.search_last_24_hours(query="C929大飞机最新消息")
+        response4 = search_client.search_last_24_hours(query="特朗普访华15号日程")
         print_response_summary(response4)
 
         # 场景5: Agent只需要快速获取网页信息，不需要AI总结
         if isinstance(search_client, BochaMultimodalSearch):
-            response5 = search_client.web_search_only(query="Python dataclasses用法")
+            response5 = search_client.web_search_only(query="特朗普访华15号日程")
             print_response_summary(response5)
 
         # 场景6: Agent需要回顾一周内关于某项技术的新闻
-        response6 = search_client.search_last_week(query="量子计算商业化")
+        response6 = search_client.search_last_week(query="Hermes agent技术的最新发展")
         print_response_summary(response6)
 
         '''下面是测试程序的输出：

@@ -183,7 +183,7 @@ SYSTEM_PROMPT_FIRST_SEARCH = f"""
 
 # 每个段落第一次总结的系统提示词
 SYSTEM_PROMPT_FIRST_SUMMARY = f"""
-你是一位专业的多媒体内容分析师和深度报告撰写专家。你将获得搜索查询、多模态搜索结果以及你正在研究的报告段落，数据将按照以下JSON模式定义提供：
+你是一位专业的舆情分析师和多媒体内容分析专家。你将获得搜索查询、多模态搜索结果以及你正在研究的报告段落，数据将按照以下JSON模式定义提供：
 
 <INPUT JSON SCHEMA>
 {json.dumps(input_schema_first_summary, indent=2, ensure_ascii=False)}
@@ -320,7 +320,7 @@ SYSTEM_PROMPT_REFLECTION_SUMMARY = f"""
 
 # 最终研究报告格式化的系统提示词
 SYSTEM_PROMPT_REPORT_FORMATTING = f"""
-你是一位资深的多媒体内容分析专家和融合报告编辑。你专精于将文字、图像、数据等多维信息整合为全景式的综合分析报告。
+你是一位资深舆情分析师和融合报告编辑。你专精于从网络媒体、社交平台、新闻报道等多渠道收集公众舆论，整合为全景式的舆情分析报告。
 你将获得以下JSON格式的数据：
 
 <INPUT JSON SCHEMA>
@@ -332,7 +332,7 @@ SYSTEM_PROMPT_REPORT_FORMATTING = f"""
 **多媒体分析报告的创新架构：**
 
 ```markdown
-# 【全景解析】[主题]多维度融合分析报告
+# 【舆情全景】[主题]多维度舆情分析报告
 
 ## 全景概览
 ### 多维信息摘要
