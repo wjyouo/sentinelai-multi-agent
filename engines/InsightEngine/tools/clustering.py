@@ -4,7 +4,7 @@ Uses sentence-transformers embeddings + KMeans to group and sample results.
 """
 
 from typing import Any, List
-
+from app.config import Settings
 import numpy as np
 from loguru import logger
 from sklearn.cluster import KMeans
@@ -14,16 +14,15 @@ class ClusteringService:
     """Lazy-loaded clustering pipeline for deduplicated search results."""
 
     def __init__(self, config):
-        self._config = config
+        self._config:Settings = config
         self._model: Any = None
 
     def _get_model(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            logger.info("  加载聚类模型 (paraphrase-multilingual-MiniLM-L12-v2)...")
-            self._model = SentenceTransformer(
-                "paraphrase-multilingual-MiniLM-L12-v2"
-            )
+            model_name = self._config.CLUSTERING_MODEL_NAME
+            logger.info(f"  加载聚类模型 ({model_name})...")
+            self._model = SentenceTransformer(model_name)
         return self._model
 
     def cluster_and_sample(self, results: list, max_results: int | None = None,

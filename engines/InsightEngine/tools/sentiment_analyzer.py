@@ -186,30 +186,29 @@ class WeiboMultilingualSentimentAnalyzer:
             assert AutoTokenizer is not None
             assert AutoModelForSequenceClassification is not None
 
-            # 使用多语言情感分析模型
-            model_name = "tabularisai/multilingual-sentiment-analysis"
+            # 从配置读取模型名称
+            model_name = getattr(_app_settings, 'SENTIMENT_MODEL_NAME', "tabularisai/multilingual-sentiment-analysis")
             local_model_path = os.path.join(weibo_sentiment_path, "model")
 
-            # 检查本地是否已有模型
-            if os.path.exists(local_model_path):
-                print("从本地加载模型...")
-                self.tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    local_model_path
-                )
-            else:
-                print("首次使用，正在下载模型到本地...")
-                # 下载并保存到本地
+            # 若配置的路径是本地目录，直接加载
+            if os.path.isdir(model_name):
+                print(f"从配置的本地路径加载模型: {model_name}")
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    model_name
-                )
+                self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            elif os.path.exists(local_model_path):
+                print("从本地缓存加载模型...")
+                self.tokenizer = AutoTokenizer.from_pretrained(local_model_path)
+                self.model = AutoModelForSequenceClassification.from_pretrained(local_model_path)
+            else:
+                print(f"首次使用，正在下载模型 ({model_name}) 到本地...")
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
-                # 保存到本地
+                # 缓存到本地
                 os.makedirs(local_model_path, exist_ok=True)
                 self.tokenizer.save_pretrained(local_model_path)
                 self.model.save_pretrained(local_model_path)
-                print(f"模型已保存到: {local_model_path}")
+                print(f"模型已缓存到: {local_model_path}")
 
             # 设置设备
             device = self._select_device()
