@@ -7,6 +7,9 @@ from ..nodes.template_selection_node import TemplateSelectionNode
 
 
 class SelectTemplateNode:
+    """
+    使用LLM来选择模板
+    """
     def __init__(self, ctx):
         self.ctx = ctx
         self._node = TemplateSelectionNode(ctx.llm_client, ctx.config.TEMPLATE_DIR)
