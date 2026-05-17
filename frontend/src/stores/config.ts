@@ -20,7 +20,6 @@ export const useConfigStore = defineStore('config', () => {
   const values = reactive<Record<string, any>>({})
   const dirty = ref(false)
   const modalOpen = ref(false)
-  const locked = ref(false)
   const lastLoaded = ref<string | null>(null)
 
   const groups: ConfigGroupDef[] = [
@@ -164,7 +163,7 @@ export const useConfigStore = defineStore('config', () => {
   function closeModal() { modalOpen.value = false }
 
   return {
-    values, groups, dirty, modalOpen, locked, lastLoaded,
+    values, groups, dirty, modalOpen, lastLoaded,
     refreshFromServer, saveUpdates, openModal, closeModal,
   }
 })

@@ -52,9 +52,6 @@
         <el-button @click="refreshConfig" :loading="refreshing">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
-        <el-button type="success" @click="startWithCheck" :loading="starting">
-          <el-icon><VideoPlay /></el-icon> 保存并启动
-        </el-button>
         <el-button type="primary" @click="saveConfig" :loading="saving">
           <el-icon><Check /></el-icon> 保存
         </el-button>
@@ -65,23 +62,16 @@
 
 <script setup lang="ts">
 import { computed, ref, reactive, watch, onBeforeUnmount } from 'vue'
-import { View, Hide, Refresh, Check, VideoPlay } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { View, Hide, Refresh, Check } from '@element-plus/icons-vue'
 import { useConfigStore } from '@/stores/config'
-import { useSystemStore } from '@/stores/system'
 import type { ConfigFieldDef } from '@/stores/config'
 
 const configStore = useConfigStore()
-const systemStore = useSystemStore()
 
 const visible = computed({
   get: () => configStore.modalOpen,
   set: (v) => {
     if (!v) {
-      if (configStore.locked && !systemStore.started) {
-        ElMessage.warning('系统未启动，请先配置并启动系统')
-        return
-      }
       configStore.closeModal()
     } else {
       configStore.openModal()
@@ -93,7 +83,6 @@ const localValues = reactive<Record<string, any>>({})
 const showPasswords = reactive<Record<string, boolean>>({})
 const refreshing = ref(false)
 const saving = ref(false)
-const starting = ref(false)
 const autoRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
 function isFieldVisible(field: ConfigFieldDef): boolean {
@@ -152,52 +141,6 @@ async function saveConfig() {
     configStore.dirty = false
   }
   saving.value = false
-}
-
-async function startWithCheck() {
-  // LLM key check: at least one engine API key must be configured
-  const keyFields = [
-    'INSIGHT_ENGINE_API_KEY',
-    'MEDIA_ENGINE_API_KEY',
-    'QUERY_ENGINE_API_KEY',
-    'REPORT_ENGINE_API_KEY',
-    'FORUM_HOST_API_KEY',
-  ]
-  const hasKey = keyFields.some(k => localValues[k] && localValues[k].trim())
-  if (!hasKey) {
-    ElMessage.warning('请至少配置一个 Engine 的 API Key 后再启动系统')
-    return
-  }
-
-  // Save config first
-  saving.value = true
-  const updates: Record<string, any> = {}
-  for (const key of Object.keys(localValues)) {
-    if (localValues[key] !== configStore.values[key]) {
-      updates[key] = localValues[key]
-    }
-  }
-  if (Object.keys(updates).length > 0) {
-    await configStore.saveUpdates(updates)
-  }
-  saving.value = false
-
-  // Start system
-  starting.value = true
-  configStore.locked = true
-  try {
-    const result = await systemStore.startSystem()
-    if (result?.success) {
-      ElMessage.success('系统启动中...')
-      configStore.closeModal()
-    } else {
-      ElMessage.error(result?.message || '系统启动失败')
-    }
-  } catch {
-    ElMessage.error('启动请求失败')
-  } finally {
-    starting.value = false
-  }
 }
 </script>
 

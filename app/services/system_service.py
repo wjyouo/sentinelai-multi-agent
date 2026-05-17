@@ -1,18 +1,9 @@
-"""
-System service — process management, config, system state.
+"""System service — configuration and legacy log helpers."""
 
-Extracted from app.py to be framework-agnostic.
-Both the app entry point and routers import from here.
-"""
-
-import os
 import sys
-import time
-import threading
 import importlib
-import atexit
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -113,65 +104,6 @@ def write_config_values(updates: Dict[str, Any]) -> None:
     config_module.reload_settings()
 
 
-# ---------------------------------------------------------------------------
-# System state
-# ---------------------------------------------------------------------------
-_system_state_lock = threading.Lock()
-_system_state: Dict[str, bool] = {
-    'started': False,
-    'starting': False,
-    'shutdown_in_progress': False,
-}
-
-
-def _set_system_state(*, started: Optional[bool] = None, starting: Optional[bool] = None):
-    with _system_state_lock:
-        if started is not None:
-            _system_state['started'] = started
-        if starting is not None:
-            _system_state['starting'] = starting
-
-
-def _get_system_state() -> Dict[str, bool]:
-    with _system_state_lock:
-        return _system_state.copy()
-
-
-def _prepare_system_start() -> Tuple[bool, Optional[str]]:
-    with _system_state_lock:
-        if _system_state['started']:
-            return False, '系统已启动'
-        if _system_state['starting']:
-            return False, '系统正在启动'
-        _system_state['starting'] = True
-        return True, None
-
-
-def _mark_shutdown_requested() -> bool:
-    with _system_state_lock:
-        if _system_state.get('shutdown_in_progress'):
-            return False
-        _system_state['shutdown_in_progress'] = True
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Forum process tracking (minimal — forum is managed by forum_service)
-# ---------------------------------------------------------------------------
-_forum_status: Dict[str, Any] = {'status': 'stopped'}
-
-
-def _log_shutdown_step(message: str):
-    logger.info(f"[Shutdown] {message}")
-
-
-def _describe_running_children() -> List[str]:
-    running = []
-    if _forum_status.get('status') == 'running':
-        running.append("forum")
-    return running
-
-
 def write_log_to_file(app_name: str, line: str):
     try:
         log_file_path = LOG_DIR / f"{app_name}.log"
@@ -198,126 +130,5 @@ def read_log_from_file(app_name: str, tail_lines: Optional[int] = None) -> List[
 
 
 def check_app_status():
-    """No-op: Streamlit healthchecks removed. Forum status tracked via _forum_status."""
+    """No-op retained for compatibility with older callers."""
     pass
-
-
-def cleanup_processes():
-    """Stop forum engine and mark system stopped."""
-    _log_shutdown_step("清理子进程")
-    _forum_status['status'] = 'stopped'
-    try:
-        from app.services.forum_service import stop_forum_engine
-        stop_forum_engine()
-    except Exception:
-        logger.exception("停止ForumEngine失败")
-    _log_shutdown_step("子进程清理完成")
-    _set_system_state(started=False, starting=False)
-
-
-def cleanup_processes_concurrent(timeout: float = 6.0):
-    """Concurrent cleanup wrapper — delegates to cleanup_processes."""
-    _log_shutdown_step(f"开始并发清理（超时 {timeout}s）")
-    t = threading.Thread(target=cleanup_processes, daemon=True)
-    t.start()
-    t.join(timeout=timeout)
-    _set_system_state(started=False, starting=False)
-
-
-def _schedule_server_shutdown(delay_seconds: float = 0.1, stop_callback=None):
-    def _shutdown():
-        time.sleep(delay_seconds)
-        if stop_callback:
-            stop_callback()
-        _log_shutdown_step("服务器停止指令已发送，即将退出主进程")
-        os._exit(0)
-    threading.Thread(target=_shutdown, daemon=True).start()
-
-
-def _start_async_shutdown(cleanup_timeout: float = 3.0, stop_callback=None):
-    _log_shutdown_step(f"收到关机指令，启动异步清理（超时 {cleanup_timeout}s）")
-
-    def _force_exit():
-        _log_shutdown_step("关机超时，触发强制退出")
-        os._exit(0)
-
-    hard_timeout = cleanup_timeout + 2.0
-    force_timer = threading.Timer(hard_timeout, _force_exit)
-    force_timer.daemon = True
-    force_timer.start()
-
-    def _cleanup_and_exit():
-        try:
-            cleanup_processes_concurrent(timeout=cleanup_timeout)
-        except Exception:
-            logger.exception("关机清理异常")
-        finally:
-            _log_shutdown_step("清理线程结束，调度主进程退出")
-            _schedule_server_shutdown(0.05, stop_callback)
-
-    threading.Thread(target=_cleanup_and_exit, daemon=True).start()
-
-
-def initialize_system_components() -> Tuple[bool, List[str], List[str]]:
-    logs: List[str] = []
-    errors: List[str] = []
-
-    try:
-        from SentinelSpider.main import SentinelSpider
-        spider = SentinelSpider()
-        if spider.initialize_database():
-            logger.info("数据库初始化成功")
-        else:
-            logger.error("数据库初始化失败")
-    except Exception as exc:
-        logs.append(f"数据库初始化异常: {exc}")
-
-    from app.services.forum_service import start_forum_engine, stop_forum_engine
-    try:
-        stop_forum_engine()
-        logs.append("已停止 ForumEngine 监控器以避免文件冲突")
-    except Exception as exc:
-        message = f"停止 ForumEngine 时发生异常: {exc}"
-        logs.append(message)
-        logger.exception(message)
-
-    _forum_status['status'] = 'stopped'
-
-    forum_started = False
-    try:
-        start_forum_engine()
-        _forum_status['status'] = 'running'
-        logs.append("ForumEngine 启动完成")
-        forum_started = True
-    except Exception as exc:
-        error_msg = f"ForumEngine 启动失败: {exc}"
-        logs.append(error_msg)
-        errors.append(error_msg)
-
-    try:
-        from app.services.report_service import initialize_report_engine
-        if initialize_report_engine():
-            logs.append("ReportEngine 初始化成功")
-        else:
-            msg = "ReportEngine 初始化失败"
-            logs.append(msg)
-            errors.append(msg)
-    except Exception as exc:
-        msg = f"ReportEngine 初始化异常: {exc}"
-        logs.append(msg)
-        errors.append(msg)
-
-    if errors:
-        cleanup_processes()
-        if forum_started:
-            try:
-                stop_forum_engine()
-            except Exception:
-                logger.exception("停止ForumEngine失败")
-        return False, logs, errors
-
-    return True, logs, []
-
-
-# Register cleanup on exit
-atexit.register(cleanup_processes)

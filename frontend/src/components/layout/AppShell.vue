@@ -1,7 +1,7 @@
 <template>
   <el-container class="app-shell">
     <el-header height="auto" class="app-header">
-      <TheHeader @refresh="$emit('refresh')" @shutdown="$emit('shutdown')" />
+      <TheHeader @refresh="$emit('refresh')" />
       <SearchSection />
     </el-header>
     <el-container class="app-main">
@@ -26,7 +26,6 @@ import StatusBar from './StatusBar.vue'
 
 defineEmits<{
   refresh: []
-  shutdown: []
 }>()
 </script>
 

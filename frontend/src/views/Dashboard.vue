@@ -1,5 +1,5 @@
 <template>
-  <AppShell @refresh="handleRefresh" @shutdown="showShutdownModal = true">
+  <AppShell @refresh="handleRefresh">
     <template #content>
       <KeepAlive>
         <component :is="activeComponent" :key="activeTab" />
@@ -7,17 +7,15 @@
     </template>
   </AppShell>
   <ConfigModal />
-  <ShutdownModal v-model:visible="showShutdownModal" />
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useAppsStore } from '@/stores/apps'
 import { useSystemStore } from '@/stores/system'
 import * as appsApi from '@/api/apps'
 import AppShell from '@/components/layout/AppShell.vue'
 import ConfigModal from '@/components/config/ConfigModal.vue'
-import ShutdownModal from '@/components/system/ShutdownModal.vue'
 import InsightTab from './InsightTab.vue'
 import MediaTab from './MediaTab.vue'
 import QueryTab from './QueryTab.vue'
@@ -28,7 +26,6 @@ const appsStore = useAppsStore()
 const systemStore = useSystemStore()
 
 const activeTab = computed(() => appsStore.activeApp)
-const showShutdownModal = ref(false)
 
 const tabComponents: Record<string, any> = {
   insight: InsightTab,

@@ -16,24 +16,16 @@
         @click="$emit('refresh')"
         title="刷新状态"
       />
-      <el-button
-        type="danger"
-        :icon="SwitchButton"
-        circle
-        @click="$emit('shutdown')"
-        title="系统关机"
-      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Refresh, SwitchButton } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import logoUrl from '@/assets/logo.png'
 
 defineEmits<{
   refresh: []
-  shutdown: []
 }>()
 </script>
 

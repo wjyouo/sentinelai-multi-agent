@@ -83,43 +83,6 @@ class TestReadConfigValues:
                 del sys.modules["config"]
 
 
-class TestSystemState:
-    def setup_method(self):
-        from app.services.system_service import _set_system_state
-        _set_system_state(started=False, starting=False)
-
-    def test_initial_state(self):
-        from app.services.system_service import _get_system_state
-        assert _get_system_state()["started"] is False
-
-    def test_set_started(self):
-        from app.services.system_service import _set_system_state, _get_system_state
-        _set_system_state(started=True)
-        assert _get_system_state()["started"] is True
-
-    def test_prepare_system_start_success(self):
-        from app.services.system_service import _prepare_system_start
-        ok, msg = _prepare_system_start()
-        assert ok is True and msg is None
-
-    def test_prepare_system_start_already_started(self):
-        from app.services.system_service import _prepare_system_start, _set_system_state
-        _set_system_state(started=True)
-        ok, _ = _prepare_system_start()
-        assert ok is False
-
-    def test_prepare_system_start_starting(self):
-        from app.services.system_service import _prepare_system_start, _set_system_state
-        _set_system_state(starting=True)
-        ok, _ = _prepare_system_start()
-        assert ok is False
-
-    def test_mark_shutdown_requested(self):
-        from app.services.system_service import _mark_shutdown_requested
-        assert _mark_shutdown_requested() is True
-        assert _mark_shutdown_requested() is False
-
-
 class TestReadWriteLog:
     @patch("app.services.system_service.Path.exists", return_value=True)
     def test_write_log(self, mock_exists):
