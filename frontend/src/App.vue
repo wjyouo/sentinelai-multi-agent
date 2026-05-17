@@ -7,6 +7,7 @@ import { onMounted, watch } from 'vue'
 import { useAppsStore } from '@/stores/apps'
 import { useGraphStore } from '@/stores/graph'
 import { useReportStore } from '@/stores/report'
+import { useSearchStore } from '@/stores/search'
 import { useSystemStore } from '@/stores/system'
 import { useSSE } from '@/composables/useSSE'
 import { usePolling } from '@/composables/usePolling'
@@ -15,6 +16,7 @@ import * as appsApi from '@/api/apps'
 const appsStore = useAppsStore()
 const graphStore = useGraphStore()
 const reportStore = useReportStore()
+const searchStore = useSearchStore()
 const systemStore = useSystemStore()
 const { connect: connectSSE } = useSSE()
 
@@ -22,6 +24,7 @@ const { connect: connectSSE } = useSSE()
 onMounted(async () => {
   connectSSE()
   await graphStore.checkEnabled()
+  await searchStore.fetchLatestResults()
 })
 
 // Poll app status every 5s

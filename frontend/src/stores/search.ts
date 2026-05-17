@@ -81,6 +81,17 @@ export const useSearchStore = defineStore('search', () => {
     engines[engine].message = data.error ?? '研究出错'
   }
 
+  async function fetchLatestResults() {
+    const res = await searchApi.fetchLatestResults()
+    const results = res.data?.results || {}
+    Object.entries(results).forEach(([engine, data]: [string, any]) => {
+      if (engines[engine] && data?.final_report) {
+        handleEngineResult(data)
+      }
+    })
+    return res.data
+  }
+
   async function performSearch(q: string) {
     query.value = q
     searching.value = true
@@ -100,6 +111,6 @@ export const useSearchStore = defineStore('search', () => {
   return {
     query, searching, lastResult, engines,
     resetEngine, handleEngineProgress, handleEngineResult, handleEngineError,
-    performSearch,
+    performSearch, fetchLatestResults,
   }
 })

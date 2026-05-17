@@ -6,6 +6,7 @@ All engines use module-level run_research() directly.
 """
 
 import threading
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -40,6 +41,57 @@ def search_all(query: str):
         t.start()
 
     return {"success": True, "message": "已启动所有引擎搜索", "query": query}
+
+
+def get_latest_results() -> Dict[str, Any]:
+    """Load latest persisted engine reports so the UI can recover after refresh."""
+    results: Dict[str, Any] = {}
+    for engine_type, output_dir in OUTPUT_DIRS.items():
+        engine_dir = Path(output_dir)
+        if not engine_dir.is_dir():
+            continue
+
+        md_files = sorted(engine_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not md_files:
+            continue
+
+        latest_md = md_files[0]
+        final_report = latest_md.read_text(encoding="utf-8", errors="ignore")
+        state_file = _find_matching_state_file(engine_dir, latest_md)
+        citations: List[Dict[str, Any]] = []
+        if state_file:
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                citations = _extract_citations_from_result(state)
+            except Exception:
+                logger.exception(f"读取 {engine_type} 最新状态文件失败: {state_file}")
+
+        results[engine_type] = {
+            "engine": engine_type,
+            "status": "done",
+            "final_report": final_report,
+            "citations": citations,
+            "report_file": str(latest_md),
+            "state_file": str(state_file) if state_file else "",
+            "updated_at": latest_md.stat().st_mtime,
+        }
+
+    return {"success": True, "results": results}
+
+
+def _find_matching_state_file(engine_dir: Path, report_file: Path) -> Path | None:
+    """Find the state JSON saved alongside a report markdown file."""
+    report_name = report_file.stem
+    suffix = ""
+    if "_" in report_name:
+        suffix = report_name.split("_", 3)[-1]
+
+    state_files = sorted(engine_dir.glob("state_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if suffix:
+        for path in state_files:
+            if suffix in path.stem:
+                return path
+    return state_files[0] if state_files else None
 
 
 def run_engine_task(engine_type: str, query: str):
