@@ -23,6 +23,7 @@ class FormatReportNode:
 
     def __call__(self, state: InsightGraphState) -> dict:
         self._pc({"status": "finalizing", "message": "正在生成最终报告...", "progress_pct": 90})
+        logger.info("\n[步骤 3] 生成最终报告...")
         paragraphs = state["paragraphs"]
 
         report_data = [{
@@ -32,8 +33,11 @@ class FormatReportNode:
 
         try:
             message = json.dumps(report_data, ensure_ascii=False)
+            logger.info(f"  开始LLM格式化调用，段落数据大小: {len(message)} 字符")
             raw = self.ctx.llm_client.stream_invoke_to_string(SYSTEM_PROMPT_REPORT_FORMATTING, message)
+            logger.info(f"  LLM格式化完成，输出大小: {len(raw)} 字符")
             final_report = self._parse_report(raw)
+            logger.info(f"  报告解析完成，最终长度: {len(final_report)} 字符")
         except Exception as e:
             logger.exception(f"LLM格式化失败，使用备用方法: {e}")
             final_report = self._fallback_format(report_data, state.get("report_title", "深度研究报告"))

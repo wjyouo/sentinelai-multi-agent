@@ -120,11 +120,6 @@ def generate_report(
         raise
 
 
-def create_agent(config_file: Optional[str] = None) -> "object":
-    """Deprecated: kept for backward compatibility. Use generate_report() directly."""
-    logger.warning("create_agent() is deprecated, use generate_report() directly")
-    return object()
-
 
 def _stringify(value: Any) -> str:
     """Safely convert any value to string."""

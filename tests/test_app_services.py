@@ -9,6 +9,8 @@ import sys
 sys.path.insert(0, str(project_root))
 
 import pytest
+import json
+from decimal import Decimal
 from unittest.mock import patch, MagicMock, mock_open
 
 
@@ -149,3 +151,25 @@ class TestExtractCitations:
     def test_empty_state(self):
         from app.services.search_service import _extract_citations_from_result
         assert _extract_citations_from_result({"paragraphs": []}) == []
+
+    def test_extracts_json_safe_decimal_score(self):
+        from app.services.search_service import _extract_citations_from_result
+        result = {
+            "paragraphs": [{
+                "title": "Insight P1",
+                "research": {
+                    "search_history": [{
+                        "query": "q",
+                        "url": "u",
+                        "title": "t",
+                        "content": "c",
+                        "score": Decimal("1095.000"),
+                    }],
+                    "reflection_iteration": Decimal("2"),
+                },
+            }],
+        }
+        citations = _extract_citations_from_result(result)
+        assert citations[0]["score"] == 1095.0
+        assert citations[0]["reflection_count"] == 2.0
+        json.dumps(citations, ensure_ascii=False)

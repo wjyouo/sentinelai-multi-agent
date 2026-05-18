@@ -12,9 +12,20 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
+from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
 from loguru import logger
+
+# Ensure local schema modules and repository root are importable when executed
+# directly or from SentinelSpider subprocesses.
+schema_root = Path(__file__).resolve().parent
+sentinel_root = schema_root.parent
+repo_root = sentinel_root.parents[1]
+for _path in (schema_root, sentinel_root, repo_root):
+    if str(_path) not in sys.path:
+        sys.path.append(str(_path))
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -24,12 +35,6 @@ from models_sa import Base
 # 导入 models_bigdata 以确保所有表类被注册到 Base.metadata
 # models_bigdata 现在也使用 models_sa 的 Base，所以所有表都在同一个 metadata 中
 import models_bigdata  # noqa: F401  # 导入以注册所有表类
-import sys
-from pathlib import Path
-
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
 
 from app.config import settings
 
@@ -116,5 +121,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 

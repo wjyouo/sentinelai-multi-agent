@@ -8,8 +8,8 @@ from typing import Optional
 from pydantic import Field
 from pathlib import Path
 
-# 计算 .env 优先级：优先当前工作目录，其次项目根目录（SentinelSpider 的上级目录）
-PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
+# 计算 .env 优先级：优先当前工作目录，其次仓库根目录
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 CWD_ENV: Path = Path.cwd() / ".env"
 ENV_FILE: str = str(CWD_ENV if CWD_ENV.exists() else (PROJECT_ROOT / ".env"))
 

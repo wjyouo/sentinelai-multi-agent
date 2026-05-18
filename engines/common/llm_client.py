@@ -160,6 +160,7 @@ class LLMClient:
             logger.error(f"流式请求失败: {str(e)}")
             raise e
 
+    # TODO: 把代码里面所有有stream_invoke_to_string的这部分，全部都去掉
     @with_retry(LLM_RETRY_CONFIG)
     def stream_invoke_to_string(self, system_prompt: str, user_prompt: str, **kwargs) -> str:
         """Streaming LLM call, safely concatenated into a single string."""

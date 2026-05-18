@@ -7,6 +7,8 @@ All engines use module-level run_research() directly.
 
 import threading
 import json
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -254,12 +256,23 @@ def _extract_citations_from_result(result: Dict[str, Any]) -> List[Dict[str, Any
             citations.append({
                 "paragraph_index": p_idx,
                 "paragraph_title": p_dict.get("title", "") if isinstance(p_dict, dict) else "",
-                "query": search.get("query", ""),
-                "url": search.get("url"),
-                "title": search.get("title"),
-                "content": (search.get("content", "") or "")[:500],
-                "score": search.get("score"),
+                "query": _json_safe_value(search.get("query", "")),
+                "url": _json_safe_value(search.get("url")),
+                "title": _json_safe_value(search.get("title")),
+                "content": _json_safe_value((search.get("content", "") or "")[:500]),
+                "score": _json_safe_value(search.get("score")),
                 "search_count": len(search_history),
-                "reflection_count": research.get("reflection_iteration", 0),
+                "reflection_count": _json_safe_value(research.get("reflection_iteration", 0)),
             })
     return citations
+
+
+def _json_safe_value(value: Any) -> Any:
+    """Normalize engine citation values so SSE json.dumps never drops engine_result."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)

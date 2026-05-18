@@ -1,78 +1,49 @@
-# ========================================
-#   Weibo舆情分析多智能体系统依赖包
-#   适用于Windows环境 + Conda部署
-# ========================================
+# ================== 核心 Web 框架 ====================
+fastapi==0.121.1
+uvicorn==0.37.0
+aiofiles==25.1.0           # StaticFiles 依赖，fastapi 不会自动安装
+starlette==0.49.3           # 直接在 events.py 中引用 StreamingResponse
 
-# ===== HTTP请求和异步 =====
-requests==2.31.0
-httpx==0.28.1
-aiohttp>=3.8.0
+# ================== 配置 & 日志 ====================
+pydantic==2.12.0
+pydantic-settings==2.11.0
+python-dotenv==1.1.1        # pydantic-settings 加载 .env 文件的底层依赖
+loguru==0.7.2
 
-# ===== LLM接口 =====
-openai>=1.3.0
-# deepseek-ai>=0.1.0  # 使用OpenAI格式
+# ================== LLM / AI Agent ====================
+openai==1.109.1
+langchain-deepseek==1.0.1
+langchain-openai==1.1.0
+langgraph==1.0.4
 
-# ===== 搜索API =====
-tavily-python>=0.3.0
+# ================== 数据库 ====================
+SQLAlchemy==2.0.43
+aiomysql==0.3.2             # MySQL 异步驱动 (mysql+aiomysql://)
+PyMySQL==1.1.2              # MySQL 同步驱动
+asyncpg==0.31.0             # PostgreSQL 异步驱动 (postgresql+asyncpg://)
 
-# ===== 数据处理 =====
-pandas>=2.0.0
-numpy>=1.24.0
-regex>=2023.8.8
-jieba==0.42.1
+# ================== 搜索 ====================
+tavily-python==0.7.24
+requests==2.32.5
 
-# ===== 数据库 =====
-pymysql==1.1.0
-aiomysql==0.2.0
-aiosqlite==0.21.0
-motor>=3.3.0
-redis>=4.6.0
-SQLAlchemy==2.0.35
-asyncpg==0.29.0
-psycopg[binary]>=3.1.0
-cryptography==42.0.7
+# ================== NLP / 机器学习 ====================
+numpy==1.26.4
+scikit-learn==1.7.2
+sentence-transformers==5.1.2
 
-# ===== 爬虫相关 =====
-Pillow==9.5.0
-opencv-python>=4.8.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-parsel==1.9.1
+# ================== 报告生成 ====================
+matplotlib==3.10.7
+scipy==1.16.3
+weasyprint==68.1
+wordcloud==1.9.6
+json-repair==0.44.1
 
-# ===== 可视化 =====
-plotly>=5.17.0
-matplotlib==3.9.0
-# ===== PDF生成 =====
-weasyprint>=60.0  # PDF导出，支持Python 3.9-3.13
+# ================== 情感分析（可选） ====================
+# 若不需要情感分析功能，可移除 torch 与 transformers（约 3GB）
+torch==2.9.0
+transformers==4.57.1
 
-# ===== 机器学习 =====
-torch>=2.0.0 # CPU版本
-transformers>=4.30.0
-sentence-transformers>=2.2.2
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-# NOTE：如果要安装GPU版本的torch，指令为pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-
-# ===== LangGraph =====
-langgraph>=0.2.0
-
-# ===== 工具库 =====
-typer>=0.9.0
-python-dotenv>=1.0.0
-python-dateutil>=2.8.2
-pytz>=2023.3
-tqdm>=4.65.0
-tenacity==8.2.2
-loguru>=0.7.0
-pydantic==2.5.2
-pydantic-settings==2.2.1
-json-repair==0.53.0
-
-# ===== 开发工具（可选） =====
-pytest>=7.4.0
-black>=23.0.0
-flake8>=6.0.0
-
-# ===== Web服务器 =====
-fastapi==0.110.2
-uvicorn==0.29.0
+# ================== 开发 / 测试 ====================
+pytest==9.0.2
+pytest-asyncio==1.3.0
+httpx==0.28.1               # 部分测试直接使用 httpx

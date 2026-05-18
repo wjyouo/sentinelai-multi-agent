@@ -137,6 +137,9 @@ postgresql_db_config = {{
     "db_name": POSTGRESQL_DB_NAME,
 }}
 
+# MediaCrawler uses this name in database/db_session.py.
+postgres_db_config = postgresql_db_config
+
 '''
             
             # 写入新配置

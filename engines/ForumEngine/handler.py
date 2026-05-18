@@ -48,8 +48,13 @@ class ForumEventHandler:
         if event_type == EventType.SUMMARY_READY:
             self._handle_summary(data)
 
+    KNOWN_SOURCES = {'insight', 'media', 'query'}
+
     def _handle_summary(self, data: Dict):
-        source = data.get("source", "unknown")
+        source = data.get("source", "").strip().lower()
+        if source not in self.KNOWN_SOURCES:
+            logger.warning(f"ForumEngine: 收到未知来源的 SUMMARY_READY，source={source!r}，已丢弃")
+            return
         summary = data.get("summary", "").strip()
         if not summary:
             return

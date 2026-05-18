@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.services.event_bus import subscribe
+from app.services.event_bus import subscribe, unsubscribe
 from engines.ForumEngine.handler import ForumEventHandler
 
 LOG_DIR = Path('logs')
@@ -24,12 +24,17 @@ MAX_FORUM_MESSAGES = 2000
 _forum_messages: List[Dict[str, Any]] = []
 
 
+_KNOWN_SENDERS = {'Insight Engine', 'Media Engine', 'Query Engine', 'Forum Host'}
+
 def _on_forum_message(event_type: str, data: Dict[str, Any]):
     """Listen to FORUM_MESSAGE events and accumulate in memory."""
+    sender = data.get('sender', '')
+    if sender not in _KNOWN_SENDERS:
+        return
     timestamp = datetime.now().strftime('%H:%M:%S')
     msg = {
         'type': data.get('type', 'agent'),
-        'sender': data.get('sender', 'Unknown'),
+        'sender': sender,
         'content': data.get('content', ''),
         'timestamp': timestamp,
         'source': data.get('source', ''),
@@ -47,6 +52,12 @@ def init_forum_log():
         f.write(f"=== ForumEngine 系统初始化 - {start_time} ===\n")
     subscribe(_on_forum_message)
     logger.info("ForumEngine: forum.log 已初始化，EventBus 消息订阅已注册")
+
+
+def shutdown_forum_service():
+    """Stop ForumEngine and unregister EventBus subscriptions."""
+    stop_forum_engine()
+    unsubscribe(_on_forum_message)
 
 
 def start_forum_engine():

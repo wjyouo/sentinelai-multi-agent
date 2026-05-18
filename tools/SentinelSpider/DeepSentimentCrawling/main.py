@@ -11,9 +11,13 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import List, Dict
 
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
+# Ensure both SentinelSpider and repository roots are importable when executed
+# directly or from SentinelSpider subprocesses.
+project_root = Path(__file__).resolve().parent.parent
+repo_root = project_root.parents[1]
+for _path in (project_root, repo_root):
+    if str(_path) not in sys.path:
+        sys.path.append(str(_path))
 
 from keyword_manager import KeywordManager
 from platform_crawler import PlatformCrawler

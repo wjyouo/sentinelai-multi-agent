@@ -14,15 +14,20 @@ import subprocess
 import asyncio
 import pymysql
 from pymysql.cursors import DictCursor
+
+# Ensure both the SentinelSpider package root and repository root are importable
+# when this file is executed directly.
+project_root = Path(__file__).resolve().parent
+repo_root = project_root.parents[1]
+for _path in (project_root, repo_root):
+    if str(_path) not in sys.path:
+        sys.path.append(str(_path))
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from sqlalchemy import inspect, text
 from app.config import settings
 from loguru import logger
 from urllib.parse import quote_plus
-
-# 添加项目根目录到路径
-project_root = Path(__file__).parent
-sys.path.append(str(project_root))
 
 try:
     import config

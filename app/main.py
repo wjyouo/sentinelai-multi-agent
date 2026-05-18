@@ -8,16 +8,25 @@ from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
-from app.services.forum_service import init_forum_log
+from app.services.forum_service import init_forum_log, shutdown_forum_service
+from app.utils.forum_reader import init_forum_reader, shutdown_forum_reader
 from app.routers import system, config, forum, search, events, report
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
+    events.init_event_stream()
     init_forum_log()
+    init_forum_reader()
     logger.info("FastAPI 服务器已启动，共享服务已初始化")
-    yield
+    try:
+        yield
+    finally:
+        shutdown_forum_reader()
+        shutdown_forum_service()
+        events.shutdown_event_stream()
+        logger.info("FastAPI 服务器已关闭，共享服务已清理")
 
 
 app = FastAPI(

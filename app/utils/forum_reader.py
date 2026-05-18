@@ -6,7 +6,7 @@ Forum日志读取工具
 import threading
 from typing import Optional
 
-from app.services.event_bus import subscribe
+from app.services.event_bus import subscribe, unsubscribe
 from app.services.event_types import EventType
 
 # ── EventBus-backed cache ──────────────────────────────────────────
@@ -25,8 +25,17 @@ def _on_forum_message(event_type: str, data: dict):
                 _latest_host_speech = content
 
 
-# 模块加载时注册，确保不会错过任何 HOST 发言
-subscribe(_on_forum_message)
+def init_forum_reader():
+    """Register HOST speech cache subscriber."""
+    subscribe(_on_forum_message)
+
+
+def shutdown_forum_reader():
+    """Unregister HOST speech cache subscriber."""
+    global _latest_host_speech
+    unsubscribe(_on_forum_message)
+    with _cache_lock:
+        _latest_host_speech = None
 
 
 # ── Public API ─────────────────────────────────────────────────────

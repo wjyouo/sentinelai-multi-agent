@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 from loguru import logger
 
-from app.services.event_bus import subscribe
+from app.services.event_bus import subscribe, unsubscribe
 
 router = APIRouter(tags=["events"])
 
@@ -25,7 +25,7 @@ _subscribers_lock = threading.Lock()
 
 # Ring buffer of recent events for replay on reconnect
 REPLAY_EVENT_TYPES = {"engine_result", "engine_progress"}
-_replay_buffer: deque = deque(maxlen=100)
+_replay_buffer: deque = deque(maxlen=300)
 _replay_lock = threading.Lock()
 
 # Per-engine latest engine_result (for guaranteed delivery even if buffer wraps)
@@ -59,7 +59,20 @@ def _event_bus_forwarder(event_type: str, data: dict):
             pass
 
 
-subscribe(_event_bus_forwarder)
+def init_event_stream():
+    """Register the SSE forwarder with the EventBus."""
+    subscribe(_event_bus_forwarder)
+
+
+def shutdown_event_stream():
+    """Unregister the SSE forwarder and clear in-memory SSE state."""
+    unsubscribe(_event_bus_forwarder)
+    with _subscribers_lock:
+        _subscribers.clear()
+    with _replay_lock:
+        _replay_buffer.clear()
+    with _latest_results_lock:
+        _latest_results.clear()
 
 
 def _register() -> Queue:
@@ -89,9 +102,10 @@ def _get_replay_events() -> list[str]:
     with _replay_lock:
         buffered = list(_replay_buffer)
 
-    # Merge: buffer events first (progress timeline), then latest results
-    # Deduplicate by content (same payload = same event)
-    seen = set(events)
+    # Merge: buffer events first (progress timeline), then latest results.
+    # Deduplicate while preserving the first occurrence. Do not pre-seed with
+    # latest results; doing so drops engine_result replay for refreshed clients.
+    seen = set()
     merged = buffered + events
     return [e for e in merged if not (e in seen or seen.add(e))]
 
