@@ -12,7 +12,11 @@ def execute_search_and_convert(ctx: MediaContext, search_output: dict, search_qu
         kwargs["max_results"] = 10
 
     logger.info("  - 执行网络搜索...")
-    response = ctx.execute_search(search_tool, search_query, **kwargs)
+    try:
+        response = ctx.execute_search(search_tool, search_query, **kwargs)
+    except Exception as exc:
+        logger.exception(f"  - 搜索调用失败，跳过本轮搜索: {exc}")
+        response = None
 
     results: list[dict] = []
     if response and response.webpages:

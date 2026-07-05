@@ -20,6 +20,7 @@ langgraph==1.0.4
 SQLAlchemy==2.0.43
 aiomysql==0.3.2             # MySQL 异步驱动 (mysql+aiomysql://)
 PyMySQL==1.1.2              # MySQL 同步驱动
+cryptography==46.0.3        # PyMySQL 连接 MySQL 8 caching_sha2_password 认证需要
 asyncpg==0.31.0             # PostgreSQL 异步驱动 (postgresql+asyncpg://)
 
 # ================== 搜索 ====================

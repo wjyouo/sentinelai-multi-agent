@@ -1,5 +1,10 @@
 # Stage 1: Build Python dependencies
-FROM docker.m.daocloud.io/library/python:3.11-slim-bookworm AS builder
+FROM python:3.11-slim-bookworm AS builder
+
+RUN sed -i \
+    -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+    -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+    /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ make libffi-dev libssl-dev \
@@ -11,7 +16,12 @@ RUN pip install --prefix=/install --no-cache-dir -i https://pypi.tuna.tsinghua.e
 
 
 # Stage 2: Runtime
-FROM docker.m.daocloud.io/library/python:3.11-slim-bookworm
+FROM python:3.11-slim-bookworm
+
+RUN sed -i \
+    -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+    -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+    /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
@@ -20,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple cryptography==46.0.3
 
 WORKDIR /app
 
@@ -29,7 +40,8 @@ COPY tools/ ./tools/
 COPY main.py ./
 
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 5000
 

@@ -31,8 +31,10 @@ class GenerateStructureNode:
 
         paragraphs = []
         for p in structure:
+            title = self._value(p, "title", "研究概述")
+            content = self._value(p, "content", "对查询主题进行总体概述和分析")
             paragraphs.append({
-                "title": p.title, "content": p.content,
+                "title": title, "content": content,
                 "research": {"search_history": [], "latest_summary": "", "is_completed": False, "reflection_iteration": 0},
             })
 
@@ -53,3 +55,11 @@ class GenerateStructureNode:
             {"title": "研究概述", "content": "对查询主题进行总体概述和分析"},
             {"title": "深度分析", "content": "深入分析查询主题的各个方面"},
         ]
+
+    @staticmethod
+    def _value(item, key: str, default: str = "") -> str:
+        if isinstance(item, dict):
+            value = item.get(key, default)
+        else:
+            value = getattr(item, key, default)
+        return str(value or default)

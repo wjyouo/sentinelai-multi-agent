@@ -23,7 +23,11 @@ def execute_search_and_convert(ctx: QueryContext, search_output: dict, search_qu
 
     results: list[dict] = []
     for query in queries:
-        response = ctx.execute_search(search_tool, query, **kwargs)
+        try:
+            response = ctx.execute_search(search_tool, query, **kwargs)
+        except Exception as exc:
+            logger.exception(f"  - 搜索调用失败，跳过本轮搜索: {exc}")
+            continue
         if not response or not response.webpages:
             continue
 

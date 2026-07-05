@@ -54,6 +54,21 @@ class RetryConfig:
 # 默认配置
 DEFAULT_RETRY_CONFIG = RetryConfig()
 
+
+def _is_non_retryable_auth_error(exc: Exception) -> bool:
+    response = getattr(exc, "response", None)
+    status_code = getattr(exc, "status_code", None) or getattr(response, "status_code", None)
+    message = str(exc).lower()
+    return (
+        status_code in (401, 403)
+        or "invalid_api_key" in message
+        or "invalid api-key" in message
+        or "authentication fails" in message
+        or "authenticationerror" in message
+        or "unauthorized" in message
+    )
+
+
 def with_retry(config: RetryConfig = None):
     """
     重试装饰器
@@ -81,6 +96,10 @@ def with_retry(config: RetryConfig = None):
                     
                 except config.retry_on_exceptions as e:
                     last_exception = e
+
+                    if _is_non_retryable_auth_error(e):
+                        logger.error(f"函数 {func.__name__} 遇到认证错误，不再重试: {str(e)}")
+                        raise e
                     
                     if attempt == config.max_retries:
                         # 最后一次尝试也失败了
@@ -167,6 +186,11 @@ def with_graceful_retry(config: RetryConfig = None, default_return=None):
                     
                 except config.retry_on_exceptions as e:
                     last_exception = e
+
+                    if _is_non_retryable_auth_error(e):
+                        logger.warning(f"非关键API {func.__name__} 遇到认证错误，不再重试: {str(e)}")
+                        logger.info(f"返回默认值以保证系统继续运行: {default_return}")
+                        return default_return
                     
                     if attempt == config.max_retries:
                         # 最后一次尝试也失败了，返回默认值而不抛出异常

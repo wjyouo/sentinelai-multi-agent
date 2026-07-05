@@ -26,6 +26,45 @@ OUTPUT_DIRS = {
 _LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 
 
+class _EmptySearchResponse:
+    def __init__(self, query: str):
+        self.query = query
+        self.conversation_id = None
+        self.answer = ""
+        self.follow_ups = []
+        self.webpages = []
+        self.images = []
+        self.modal_cards = []
+
+
+class _NoopSearchAgency:
+    def __init__(self, reason: str):
+        self.reason = reason
+
+    def _empty(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        logger.warning(f"搜索服务未配置，跳过外部搜索: {self.reason}")
+        return _EmptySearchResponse(query)
+
+    def comprehensive_search(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        return self._empty(query, *args, **kwargs)
+
+    def web_search_only(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        return self._empty(query, *args, **kwargs)
+
+    def search_for_structured_data(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        return self._empty(query, *args, **kwargs)
+
+    def search_last_24_hours(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        return self._empty(query, *args, **kwargs)
+
+    def search_last_week(self, query: str, *args, **kwargs) -> _EmptySearchResponse:
+        return self._empty(query, *args, **kwargs)
+
+
+def _configured(value: Any) -> bool:
+    return bool(str(value or "").strip())
+
+
 def search_all(query: str):
     """Launch all 3 engine tasks in parallel background threads."""
     if not query.strip():
@@ -204,7 +243,13 @@ def _run_media_research(query: str) -> Dict[str, Any]:
         base_url=config.MEDIA_ENGINE_BASE_URL,
     )
 
-    if search_type == "TavilyAPI":
+    if search_type == "TavilyAPI" and not _configured(config.TAVILY_API_KEY):
+        search_agency = _NoopSearchAgency("TAVILY_API_KEY 未配置")
+    elif search_type == "AnspireAPI" and not _configured(config.ANSPIRE_API_KEY):
+        search_agency = _NoopSearchAgency("ANSPIRE_API_KEY 未配置")
+    elif search_type == "BochaAPI" and not _configured(config.BOCHA_WEB_SEARCH_API_KEY):
+        search_agency = _NoopSearchAgency("BOCHA_WEB_SEARCH_API_KEY 未配置")
+    elif search_type == "TavilyAPI":
         search_agency = TavilySearchWrapper(api_key=config.TAVILY_API_KEY)
     elif search_type == "AnspireAPI":
         search_agency = AnspireAISearch(api_key=config.ANSPIRE_API_KEY)
@@ -237,7 +282,10 @@ def _run_query_research(query: str) -> Dict[str, Any]:
         model_name=config.QUERY_ENGINE_MODEL_NAME,
         base_url=config.QUERY_ENGINE_BASE_URL,
     )
-    search_agency = TavilySearchWrapper(api_key=config.TAVILY_API_KEY)
+    if _configured(config.TAVILY_API_KEY):
+        search_agency = TavilySearchWrapper(api_key=config.TAVILY_API_KEY)
+    else:
+        search_agency = _NoopSearchAgency("TAVILY_API_KEY 未配置")
 
     def progress_callback(data):
         publish(EventType.ENGINE_PROGRESS, {"engine": "query", **data})
