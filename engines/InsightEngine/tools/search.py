@@ -94,6 +94,22 @@ class MediaCrawlerDB:
             logger.exception(f"数据库查询时发生错误: {e}")
             return []
 
+    def _get_existing_tables(self) -> set[str]:
+        """Return table names in the current database using a stable column alias."""
+        rows = self._execute_query(
+            "SELECT TABLE_NAME AS table_name "
+            "FROM information_schema.TABLES "
+            "WHERE TABLE_SCHEMA = DATABASE()"
+        )
+        existing: set[str] = set()
+        for row in rows or []:
+            table_name = row.get("table_name")
+            if table_name is None and row:
+                table_name = next(iter(row.values()))
+            if table_name:
+                existing.add(str(table_name).lower())
+        return existing
+
     @staticmethod
     def _to_datetime(ts: Any) -> Optional[datetime]:
         if not ts: return None
@@ -158,14 +174,13 @@ class MediaCrawlerDB:
             'zhihu_content':  f"(COALESCE(CAST(voteup_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(comment_count AS UNSIGNED), 0) * {self.W_COMMENT})",
         }
 
-        # 只查真实存在的表，避免 UNION ALL 因某张表不存在而整体失败
-        rows = self._execute_query("SHOW TABLES")
-        # SHOW TABLES 的列名因数据库而异：MySQL 是 Tables_in_<db>，这里取第一列
-        existing = {list(r.values())[0] for r in rows} if rows else set()
+        # 只查真实存在的表，避免 UNION ALL 因某张表不存在而整体失败。
+        # 使用 information_schema 并固定别名，避免 SHOW TABLES 的返回列名随数据库名变化。
+        existing = self._get_existing_tables()
 
         all_queries, params = [], []
         for table, formula in hotness_formulas.items():
-            if table not in existing:
+            if table.lower() not in existing:
                 logger.debug(f"表 {table} 不存在，跳过")
                 continue
 

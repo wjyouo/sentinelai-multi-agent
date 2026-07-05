@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, Optional, Generator
-from langchain_deepseek import ChatDeepSeek
+from langchain_openai import ChatOpenAI
 from loguru import logger
 
 from openai import OpenAI
@@ -186,18 +186,24 @@ class LLMClient:
         Returns:
             An instance of output_model populated by the LLM.
         """
-        from langchain_deepseek import ChatDeepSeek
-
         current_time = datetime.now().strftime("%Y年%m月%d日%H时%M分")
         user_prompt = f"今天的实际时间是{current_time}\n{user_prompt}"
 
-        llm = ChatDeepSeek(
+        extra_body = kwargs.pop("extra_body", None)
+        if extra_body is None and self.model_name.lower().startswith("qwen3"):
+            # Qwen3 thinking mode does not allow forced tool/function calling,
+            # which LangChain uses for with_structured_output().
+            extra_body = {"enable_thinking": False}
+
+        llm = ChatOpenAI(
             model=self.model_name,
             api_key=self.api_key,
             base_url=self.base_url,
             timeout=kwargs.pop("timeout", self.timeout),
+            max_retries=0,
+            extra_body=extra_body,
         )
-        structured = llm.with_structured_output(output_model)
+        structured = llm.with_structured_output(output_model, method="function_calling")
         return structured.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
