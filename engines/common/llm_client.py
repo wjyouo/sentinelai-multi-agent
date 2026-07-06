@@ -4,6 +4,7 @@ Shared OpenAI-compatible LLM client for all engines.
 
 import os
 import sys
+import json
 from datetime import datetime
 from typing import Any, Dict, Optional, Generator
 from langchain_openai import ChatOpenAI
@@ -51,9 +52,18 @@ class LLMClient:
         # TODO:最后兜底备选方案，使用structured output来实现，但是这样的话，没办法使用通用的llm_client，每次调用前，还需要重新构建一个LLM
         
         prefix = engine_name.upper().replace(" ", "_")
+        try:
+            from app import config as config_module
+            configured_timeout = getattr(config_module.settings, "LLM_REQUEST_TIMEOUT", None)
+            configured_engine_timeout = getattr(config_module.settings, f"{prefix}_REQUEST_TIMEOUT", None)
+        except Exception:
+            configured_timeout = None
+            configured_engine_timeout = None
         timeout_fallback = (
             os.getenv("LLM_REQUEST_TIMEOUT")
             or os.getenv(f"{prefix}_REQUEST_TIMEOUT")
+            or configured_engine_timeout
+            or configured_timeout
             or "1800"
         )
         try:
@@ -172,6 +182,41 @@ class LLMClient:
             return b''.join(byte_chunks).decode('utf-8', errors='replace')
         return ""
 
+    @staticmethod
+    def _extract_json_payload(raw: str):
+        text = (raw or "").strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+
+        starts = [idx for idx in (text.find("{"), text.find("[")) if idx >= 0]
+        if not starts:
+            raise ValueError("No JSON payload found in LLM response.")
+        start = min(starts)
+        end = max(text.rfind("}"), text.rfind("]"))
+        if end < start:
+            raise ValueError("Incomplete JSON payload in LLM response.")
+        return json.loads(text[start:end + 1])
+
+    @staticmethod
+    def _build_output_model(output_model: type, payload):
+        model_fields = getattr(output_model, "model_fields", {})
+        if isinstance(payload, list) and "paragraphs" in model_fields:
+            payload = {"paragraphs": payload}
+
+        if hasattr(output_model, "model_validate"):
+            return output_model.model_validate(payload)
+        return output_model.parse_obj(payload)
+
 
     def structured_invoke(self, system_prompt: str, user_prompt: str,
                           output_model: type, **kwargs):
@@ -188,6 +233,14 @@ class LLMClient:
         """
         current_time = datetime.now().strftime("%Y年%m月%d日%H时%M分")
         user_prompt = f"今天的实际时间是{current_time}\n{user_prompt}"
+
+        try:
+            raw = self.stream_invoke_to_string(system_prompt, user_prompt, **kwargs)
+            if raw:
+                payload = self._extract_json_payload(raw)
+                return self._build_output_model(output_model, payload)
+        except Exception as exc:
+            logger.debug(f"structured_invoke stream JSON fallback failed: {exc}")
 
         extra_body = kwargs.pop("extra_body", None)
         if extra_body is None and self.model_name.lower().startswith("qwen3"):

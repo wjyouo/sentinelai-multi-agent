@@ -22,6 +22,7 @@ const appsStore = useAppsStore()
 const reportStore = useReportStore()
 
 const apps = computed(() => [
+  { name: 'trendscope', label: 'TrendScope', locked: false },
   { name: 'insight', label: 'Insight', locked: false },
   { name: 'media', label: 'Media', locked: false },
   { name: 'query', label: 'Query', locked: false },

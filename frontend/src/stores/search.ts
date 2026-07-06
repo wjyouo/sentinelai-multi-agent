@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import * as searchApi from '@/api/search'
+import type { SearchOptions } from '@/api/search'
 
 export interface Citation {
   paragraph_index: number
@@ -10,6 +11,12 @@ export interface Citation {
   title: string | null
   content: string | null
   score: number | null
+  source_type?: string
+  credibility?: string
+  source_label?: string
+  source_domain?: string
+  published_date?: string
+  credibility_reason?: string
   search_count: number
   reflection_count: number
 }
@@ -44,6 +51,7 @@ export const useSearchStore = defineStore('search', () => {
   const lastResult = ref<any>(null)
 
   const engines = reactive<Record<string, EngineState>>({
+    trendscope: emptyEngineState(),
     insight: emptyEngineState(),
     media: emptyEngineState(),
     query: emptyEngineState(),
@@ -92,15 +100,16 @@ export const useSearchStore = defineStore('search', () => {
     return res.data
   }
 
-  async function performSearch(q: string) {
+  async function performSearch(q: string, options?: Partial<SearchOptions>) {
     query.value = q
     searching.value = true
     // Reset all engines for new search
+    resetEngine('trendscope')
     resetEngine('insight')
     resetEngine('media')
     resetEngine('query')
     try {
-      const res = await searchApi.search(q)
+      const res = await searchApi.search(q, options)
       lastResult.value = res.data
       return res.data
     } finally {

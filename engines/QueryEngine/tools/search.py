@@ -34,6 +34,7 @@ if utils_dir not in sys.path:
 
 from retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
 from dataclasses import dataclass, field
+from app import config as config_module
 
 # 运行前请确保已安装Tavily库: pip install tavily-python
 try:
@@ -84,12 +85,12 @@ class TavilyNewsAgency:
         """
         初始化客户端。
         Args:
-            api_key: Tavily API密钥，若不提供则从环境变量 TAVILY_API_KEY 读取。
+            api_key: Tavily API密钥，若不提供则从项目根目录 .env 读取。
         """
         if api_key is None:
-            api_key = os.getenv("TAVILY_API_KEY")
+            api_key = config_module.settings.TAVILY_API_KEY
             if not api_key:
-                raise ValueError("Tavily API Key未找到！请设置TAVILY_API_KEY环境变量或在初始化时提供")
+                raise ValueError("Tavily API Key 未找到，请在项目根目录 .env 中设置 TAVILY_API_KEY")
         self._client = TavilyClient(api_key=api_key)
 
     @with_graceful_retry(SEARCH_API_RETRY_CONFIG, default_return=TavilyResponse(query="搜索失败"))

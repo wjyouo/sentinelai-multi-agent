@@ -23,6 +23,10 @@ class MediaContext:
     engine_name: str = "media"
     progress_callback: Optional[Callable] = None
 
+    def __post_init__(self):
+        if self.progress_callback is None:
+            self.progress_callback = lambda data: None
+
     def execute_search(self, tool_name: str, query: str, **kwargs) -> Any:
         """Dispatch to the right search agency method (polymorphic)."""
         logger.info(f"  → 执行搜索工具: {tool_name}")

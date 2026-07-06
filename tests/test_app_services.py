@@ -122,6 +122,7 @@ class TestSearchAll:
         from app.services.search_service import search_all
         result = search_all("test query")
         assert result["success"] is True
+        assert result["options"]["search_enhancement_mode"] == "off"
         assert mock_run.call_count == 3
 
     @patch("app.services.search_service.run_engine_task")

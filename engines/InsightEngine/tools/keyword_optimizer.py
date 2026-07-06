@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 # 添加项目根目录到Python路径以导入config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-from app.config import settings
+from app import config as config_module
 from loguru import logger
 
 # 添加utils目录到Python路径
@@ -44,21 +44,31 @@ class KeywordOptimizer:
         初始化关键词优化器
         
         Args:
-            api_key: 硅基流动API密钥，如果不提供则从配置文件读取
-            base_url: 接口基础地址，默认使用配置文件提供的SiliconFlow地址
+            api_key: 关键词优化模型 API 密钥，如果不提供则从项目根目录 .env 读取
+            base_url: OpenAI 兼容接口基础地址，如果不提供则从项目根目录 .env 读取
         """
+        settings = config_module.settings
         self.api_key = api_key or settings.KEYWORD_OPTIMIZER_API_KEY
-
-        if not self.api_key:
-            raise ValueError("未找到硅基流动API密钥，请在config.py中设置KEYWORD_OPTIMIZER_API_KEY")
-
         self.base_url = base_url or settings.KEYWORD_OPTIMIZER_BASE_URL
+        self.model = model_name or settings.KEYWORD_OPTIMIZER_MODEL_NAME
+
+        missing = []
+        if not self.api_key:
+            missing.append("KEYWORD_OPTIMIZER_API_KEY")
+        if not self.base_url:
+            missing.append("KEYWORD_OPTIMIZER_BASE_URL")
+        if not self.model:
+            missing.append("KEYWORD_OPTIMIZER_MODEL_NAME")
+        if missing:
+            raise ValueError(
+                "关键词优化器配置不完整，请在项目根目录 .env 中设置: "
+                + ", ".join(missing)
+            )
 
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url
         )
-        self.model = model_name or settings.KEYWORD_OPTIMIZER_MODEL_NAME
     
     def optimize_keywords(self, original_query: str, context: str = "") -> KeywordOptimizationResponse:
         """

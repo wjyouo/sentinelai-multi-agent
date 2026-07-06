@@ -13,12 +13,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from loguru import logger
-from app.config import settings
+from app import config as config_module
 from app.services.event_bus import publish
 from app.services.event_types import EventType
-from app.services.forum_service import start_forum_engine
+from app.services.trendscope_service import TrendScopeOptions, TrendScopeOrchestrator
 
 OUTPUT_DIRS = {
+    'trendscope': 'data/report/trendscope',
     'insight': 'data/report/insight',
     'media': 'data/report/media',
     'query': 'data/report/query',
@@ -65,21 +66,31 @@ def _configured(value: Any) -> bool:
     return bool(str(value or "").strip())
 
 
-def search_all(query: str):
-    """Launch all 3 engine tasks in parallel background threads."""
+def search_all(query: str, options: Dict[str, Any] | None = None):
+    """Launch TrendScope plus automatically selected engine tasks."""
     if not query.strip():
         return {"success": False, "message": "搜索查询不能为空"}
 
-    # TODO:这个方法应该放在整个系统启动开始时候
-    start_forum_engine()
+    trend_options = TrendScopeOptions.from_payload(options)
+    intent = TrendScopeOrchestrator().analyze_intent(query, trend_options)
+    selected_agents = intent.selected_agents
 
-    for engine_type in ['insight', 'media', 'query']:
+    for engine_type in selected_agents:
         t = threading.Thread(
             target=run_engine_task,
-            args=(engine_type, query),
+            args=(engine_type, query, trend_options.model_dump()),
             daemon=True,
         )
         t.start()
+
+    return {
+        "success": True,
+        "message": "auto-selected agents started",
+        "query": query,
+        "intent": intent.model_dump(),
+        "options": trend_options.model_dump(),
+        "selected_agents": selected_agents,
+    }
 
     return {"success": True, "message": "已启动所有引擎搜索", "query": query}
 
@@ -135,7 +146,7 @@ def _find_matching_state_file(engine_dir: Path, report_file: Path) -> Path | Non
     return state_files[0] if state_files else None
 
 
-def run_engine_task(engine_type: str, query: str):
+def run_engine_task(engine_type: str, query: str, options: Dict[str, Any] | None = None):
     """Run an engine agent in the current thread, publishing progress via SSE."""
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
     _log_file = str(_LOG_DIR / f"{engine_type}.log")
@@ -143,7 +154,7 @@ def run_engine_task(engine_type: str, query: str):
     logger.add(
         _log_file,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} - {message}",
-        level=settings.LOG_LEVEL, encoding="utf-8", rotation="10 MB",
+        level=config_module.settings.LOG_LEVEL, encoding="utf-8", rotation="10 MB",
         # record["name"] 是模块的 __name__，例如engines.InsightEngine.agent
         filter=lambda record: engine_type.lower() in record["name"].lower() or "common" in record["name"].lower(),
     )
@@ -154,12 +165,14 @@ def run_engine_task(engine_type: str, query: str):
             "message": "正在初始化引擎...", "progress_pct": 0,
         })
 
-        if engine_type == 'insight':
+        if engine_type == 'trendscope':
+            result = _run_trendscope_research(query, options)
+        elif engine_type == 'insight':
             result = _run_insight_research(query)
         elif engine_type == 'media':
-            result = _run_media_research(query)
+            result = _run_media_research(query, options)
         elif engine_type == 'query':
-            result = _run_query_research(query)
+            result = _run_query_research(query, options)
         else:
             raise ValueError(f"Unknown engine type: {engine_type}")
 
@@ -216,7 +229,43 @@ def _run_insight_research(query: str) -> Dict[str, Any]:
     return run_research(query, config, llm_client, progress_callback)
 
 
-def _run_media_research(query: str) -> Dict[str, Any]:
+def _run_trendscope_research(query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    trend_options = TrendScopeOptions.from_payload(options)
+    search_agency = _build_public_search_agency()
+
+    def progress_callback(data):
+        publish(EventType.ENGINE_PROGRESS, {"engine": "trendscope", **data})
+
+    return TrendScopeOrchestrator().run(
+        query,
+        options=trend_options,
+        search_agency=search_agency,
+        progress_callback=progress_callback,
+        save_report=True,
+    )
+
+
+def _build_public_search_agency() -> Any:
+    from engines.MediaEngine.tools import (
+        BochaMultimodalSearch, AnspireAISearch, TavilySearchWrapper,
+    )
+
+    settings = config_module.settings
+    search_type = settings.SEARCH_TOOL_TYPE or "TavilyAPI"
+    if search_type == "TavilyAPI" and not _configured(settings.TAVILY_API_KEY):
+        return _NoopSearchAgency("TAVILY_API_KEY not configured")
+    if search_type == "AnspireAPI" and not _configured(settings.ANSPIRE_API_KEY):
+        return _NoopSearchAgency("ANSPIRE_API_KEY not configured")
+    if search_type == "BochaAPI" and not _configured(settings.BOCHA_WEB_SEARCH_API_KEY):
+        return _NoopSearchAgency("BOCHA_WEB_SEARCH_API_KEY not configured")
+    if search_type == "TavilyAPI":
+        return TavilySearchWrapper(api_key=settings.TAVILY_API_KEY)
+    if search_type == "AnspireAPI":
+        return AnspireAISearch(api_key=settings.ANSPIRE_API_KEY)
+    return BochaMultimodalSearch(api_key=settings.BOCHA_WEB_SEARCH_API_KEY)
+
+
+def _run_media_research(query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
     from app.config import settings, Settings
     from engines.MediaEngine.agent import run_research
     from engines.MediaEngine.llms import LLMClient
@@ -226,6 +275,7 @@ def _run_media_research(query: str) -> Dict[str, Any]:
 
     model = settings.MEDIA_ENGINE_MODEL_NAME or "gemini-2.5-pro"
     search_type = settings.SEARCH_TOOL_TYPE or "TavilyAPI"
+    trend_options = TrendScopeOptions.from_payload(options)
     config = Settings(
         MEDIA_ENGINE_API_KEY=settings.MEDIA_ENGINE_API_KEY,
         MEDIA_ENGINE_BASE_URL=settings.MEDIA_ENGINE_BASE_URL,
@@ -237,6 +287,7 @@ def _run_media_research(query: str) -> Dict[str, Any]:
         MAX_REFLECTIONS=2, SEARCH_CONTENT_MAX_LENGTH=20000,
         OUTPUT_DIR=OUTPUT_DIRS['media'],
     )
+    config.SEARCH_ENHANCEMENT_MODE = trend_options.search_enhancement_mode
     llm_client = LLMClient(
         api_key=config.MEDIA_ENGINE_API_KEY,
         model_name=config.MEDIA_ENGINE_MODEL_NAME,
@@ -262,13 +313,14 @@ def _run_media_research(query: str) -> Dict[str, Any]:
     return run_research(query, config, llm_client, search_agency, progress_callback)
 
 
-def _run_query_research(query: str) -> Dict[str, Any]:
+def _run_query_research(query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
     from app.config import settings, Settings
     from engines.QueryEngine.agent import run_research
     from engines.QueryEngine.llms import LLMClient
     from engines.MediaEngine.tools.search import TavilySearchWrapper
 
     model = settings.QUERY_ENGINE_MODEL_NAME or "deepseek-chat"
+    trend_options = TrendScopeOptions.from_payload(options)
     config = Settings(
         QUERY_ENGINE_API_KEY=settings.QUERY_ENGINE_API_KEY,
         QUERY_ENGINE_BASE_URL=settings.QUERY_ENGINE_BASE_URL,
@@ -277,6 +329,7 @@ def _run_query_research(query: str) -> Dict[str, Any]:
         MAX_REFLECTIONS=2, SEARCH_CONTENT_MAX_LENGTH=20000,
         OUTPUT_DIR=OUTPUT_DIRS['query'],
     )
+    config.SEARCH_ENHANCEMENT_MODE = trend_options.search_enhancement_mode
     llm_client = LLMClient(
         api_key=config.QUERY_ENGINE_API_KEY,
         model_name=config.QUERY_ENGINE_MODEL_NAME,
@@ -309,6 +362,12 @@ def _extract_citations_from_result(result: Dict[str, Any]) -> List[Dict[str, Any
                 "title": _json_safe_value(search.get("title")),
                 "content": _json_safe_value((search.get("content", "") or "")[:500]),
                 "score": _json_safe_value(search.get("score")),
+                "source_type": _json_safe_value(search.get("source_type", "")),
+                "credibility": _json_safe_value(search.get("credibility", "")),
+                "source_label": _json_safe_value(search.get("source_label", "")),
+                "source_domain": _json_safe_value(search.get("source_domain", "")),
+                "published_date": _json_safe_value(search.get("published_date", "")),
+                "credibility_reason": _json_safe_value(search.get("credibility_reason", "")),
                 "search_count": len(search_history),
                 "reflection_count": _json_safe_value(research.get("reflection_iteration", 0)),
             })

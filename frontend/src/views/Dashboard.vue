@@ -16,6 +16,7 @@ import { useSystemStore } from '@/stores/system'
 import * as appsApi from '@/api/apps'
 import AppShell from '@/components/layout/AppShell.vue'
 import ConfigModal from '@/components/config/ConfigModal.vue'
+import TrendScopeTab from './TrendScopeTab.vue'
 import InsightTab from './InsightTab.vue'
 import MediaTab from './MediaTab.vue'
 import QueryTab from './QueryTab.vue'
@@ -28,6 +29,7 @@ const systemStore = useSystemStore()
 const activeTab = computed(() => appsStore.activeApp)
 
 const tabComponents: Record<string, any> = {
+  trendscope: TrendScopeTab,
   insight: InsightTab,
   media: MediaTab,
   query: QueryTab,

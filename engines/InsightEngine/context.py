@@ -86,16 +86,29 @@ class InsightContext:
                 metadata=result,
             )
 
-        # Keyword-optimized search
-        optimized = get_keyword_optimizer().optimize_keywords(
-            original_query=query, context=f"使用{tool_name}工具进行查询"
-        )
+        # Keyword-optimized search. Missing optimizer config should not stop
+        # the whole Insight Agent; it can still search with the original query.
+        try:
+            optimized = get_keyword_optimizer().optimize_keywords(
+                original_query=query, context=f"使用{tool_name}工具进行查询"
+            )
+            optimized_keywords = optimized.optimized_keywords or [query]
+            optimization_reasoning = optimized.reasoning
+        except Exception as exc:
+            logger.warning(
+                "关键词优化器未启用，已回退为原始查询。请在项目根目录 .env 配置 "
+                "KEYWORD_OPTIMIZER_API_KEY / KEYWORD_OPTIMIZER_BASE_URL / "
+                f"KEYWORD_OPTIMIZER_MODEL_NAME。原因: {exc}"
+            )
+            optimized_keywords = [query]
+            optimization_reasoning = "关键词优化器未配置或不可用，使用原始查询。"
+
         logger.info(f"  🔍 原始查询: '{query}'")
-        logger.info(f"  ✨ 优化后关键词: {optimized.optimized_keywords}")
+        logger.info(f"  ✨ 优化后关键词: {optimized_keywords}")
 
         all_results = []
         total_count = 0
-        for keyword in optimized.optimized_keywords:
+        for keyword in optimized_keywords:
             logger.info(f"    查询关键词: '{keyword}'")
             try:
                 response = self._dispatch_search(tool_name, keyword, **kwargs)
@@ -127,8 +140,8 @@ class InsightContext:
             tool_name=f"{tool_name}_optimized",
             parameters={
                 "original_query": query,
-                "optimized_keywords": optimized.optimized_keywords,
-                "optimization_reasoning": optimized.reasoning,
+                "optimized_keywords": optimized_keywords,
+                "optimization_reasoning": optimization_reasoning,
                 **kwargs,
             },
             results=unique_results,

@@ -18,7 +18,11 @@ async def search(request: Request):
     if not query:
         raise HTTPException(status_code=400, detail="搜索查询不能为空")
 
-    return search_all(query)
+    options = data.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(status_code=400, detail="options must be an object")
+
+    return search_all(query, options)
 
 @router.get("/api/search/latest")
 async def latest_search_results():

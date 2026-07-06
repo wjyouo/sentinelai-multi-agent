@@ -6,7 +6,7 @@ from openai import OpenAI
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import re
-from app.config import settings
+from app import config as config_module
 
 from app.utils.retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
 
@@ -21,13 +21,14 @@ class ForumHost:
         初始化论坛主持人
         
         Args:
-            api_key: 论坛主持人 LLM API 密钥，如果不提供则从配置文件读取
-            base_url: 论坛主持人 LLM API 接口基础地址，默认使用配置文件提供的SiliconFlow地址
+            api_key: 论坛主持人 LLM API 密钥，如果不提供则从项目根目录 .env 读取
+            base_url: 论坛主持人 LLM API 接口基础地址，如果不提供则从项目根目录 .env 读取
         """
+        settings = config_module.settings
         self.api_key = api_key or settings.FORUM_HOST_API_KEY
 
         if not self.api_key:
-            raise ValueError("未找到论坛主持人API密钥，请在环境变量文件中设置FORUM_HOST_API_KEY")
+            raise ValueError("未找到 Forum Host API 密钥，请在项目根目录 .env 中设置 FORUM_HOST_API_KEY")
 
         self.base_url = base_url or settings.FORUM_HOST_BASE_URL
 

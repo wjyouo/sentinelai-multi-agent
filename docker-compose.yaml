@@ -49,6 +49,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-Atguigu.123}
       - DB_NAME=${DB_NAME:-media_crawler}
       - DB_CHARSET=${DB_CHARSET:-utf8mb4}
+      - DB_WAIT_TIMEOUT=${DB_WAIT_TIMEOUT:-30}
       # Insight Engine (Kimi K2)
       - INSIGHT_ENGINE_API_KEY=${INSIGHT_ENGINE_API_KEY:-}
       - INSIGHT_ENGINE_BASE_URL=${INSIGHT_ENGINE_BASE_URL:-https://api.moonshot.cn/v1}

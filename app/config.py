@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # ================== 服务器配置 ====================
     HOST: str = Field("0.0.0.0", description="尚舆分析平台主机地址，例如 0.0.0.0 或 127.0.0.1")
     PORT: int = Field(5000, description="服务器端口号，默认5000")
+    FRONTEND_PORT: int = Field(5173, description="前端开发或容器端口")
+    DB_EXPOSE_PORT: int = Field(3307, description="Docker 暴露数据库端口")
     LOG_LEVEL:str = Field("INFO",description="日志等级")
 
     # ====================== 数据库配置 ======================
@@ -37,6 +39,7 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = Field("your_db_password", description="数据库密码")
     DB_NAME: str = Field("your_db_name", description="数据库名称")
     DB_CHARSET: str = Field("utf8mb4", description="数据库字符集，推荐utf8mb4，兼容emoji")
+    DATABASE_URL: Optional[str] = Field(None, description="可选完整数据库连接串，部分工具会优先读取")
     
     # ======================= LLM 相关 =======================
     
@@ -116,8 +119,14 @@ class Settings(BaseSettings):
     SEARCH_CONTENT_MAX_LENGTH: int = Field(500000, description="搜索最大内容长度（MediaEngine/QueryEngine 使用）")
     SAVE_INTERMEDIATE_STATES: bool = Field(True, description="是否保存中间状态")
     MAX_SEARCH_RESULTS: int = Field(20, description="最大搜索结果数（QueryEngine）")
+    SEARCH_ENHANCEMENT_MODE: str = Field("off", description="运行时搜索增强模式（off/light/full），通常由前端请求传入")
     # Bocha 兼容键（别名）
     BOCHA_API_KEY: Optional[str] = Field(None, description="Bocha 兼容键（别名）")
+    LLM_REQUEST_TIMEOUT: Optional[float] = Field(1800, description="LLM 请求超时秒数")
+    INSIGHTENGINE_REQUEST_TIMEOUT: Optional[float] = Field(None, description="InsightEngine LLM 请求超时秒数")
+    MEDIAENGINE_REQUEST_TIMEOUT: Optional[float] = Field(None, description="MediaEngine LLM 请求超时秒数")
+    QUERYENGINE_REQUEST_TIMEOUT: Optional[float] = Field(None, description="QueryEngine LLM 请求超时秒数")
+    REPORTENGINE_REQUEST_TIMEOUT: Optional[float] = Field(None, description="ReportEngine LLM 请求超时秒数")
     
     # 只有配置了这个属性，才能够自动加载.env文件
     model_config = ConfigDict(
@@ -148,16 +157,28 @@ def reload_settings() -> Settings:
     # 先将 CONFIG_KEYS 对应的环境变量从 os.environ 中清除，
     # 防止 pydantic-settings 优先读旧的 os.environ 值而忽略 .env 文件的修改
     _keys_to_clear = [
-        'HOST', 'PORT', 'DB_DIALECT', 'DB_HOST', 'DB_PORT', 'DB_USER',
-        'DB_PASSWORD', 'DB_NAME', 'DB_CHARSET',
+        'HOST', 'PORT', 'FRONTEND_PORT', 'DB_EXPOSE_PORT', 'LOG_LEVEL',
+        'DB_DIALECT', 'DB_HOST', 'DB_PORT', 'DB_USER',
+        'DB_PASSWORD', 'DB_NAME', 'DB_CHARSET', 'DATABASE_URL',
         'INSIGHT_ENGINE_API_KEY', 'INSIGHT_ENGINE_BASE_URL', 'INSIGHT_ENGINE_MODEL_NAME',
         'MEDIA_ENGINE_API_KEY', 'MEDIA_ENGINE_BASE_URL', 'MEDIA_ENGINE_MODEL_NAME',
         'QUERY_ENGINE_API_KEY', 'QUERY_ENGINE_BASE_URL', 'QUERY_ENGINE_MODEL_NAME',
         'REPORT_ENGINE_API_KEY', 'REPORT_ENGINE_BASE_URL', 'REPORT_ENGINE_MODEL_NAME',
         'FORUM_HOST_API_KEY', 'FORUM_HOST_BASE_URL', 'FORUM_HOST_MODEL_NAME',
         'KEYWORD_OPTIMIZER_API_KEY', 'KEYWORD_OPTIMIZER_BASE_URL', 'KEYWORD_OPTIMIZER_MODEL_NAME',
-        'TAVILY_API_KEY', 'SEARCH_TOOL_TYPE', 'BOCHA_WEB_SEARCH_API_KEY', 'ANSPIRE_API_KEY',
+        'TAVILY_API_KEY', 'SEARCH_TOOL_TYPE', 'BOCHA_BASE_URL', 'BOCHA_WEB_SEARCH_API_KEY',
+        'BOCHA_API_KEY', 'ANSPIRE_BASE_URL', 'ANSPIRE_API_KEY',
         'SENTINEL_SPIDER_API_KEY', 'SENTINEL_SPIDER_BASE_URL', 'SENTINEL_SPIDER_MODEL_NAME',
+        'SENTIMENT_ANALYSIS_ENABLED', 'ENABLE_SENTIMENT_PER_SEARCH', 'SENTIMENT_MODEL_NAME',
+        'CLUSTERING_MODEL_NAME', 'ENABLE_CLUSTERING', 'MAX_CLUSTERED_RESULTS', 'RESULTS_PER_CLUSTER',
+        'DEFAULT_SEARCH_HOT_CONTENT_LIMIT', 'DEFAULT_SEARCH_TOPIC_GLOBALLY_LIMIT_PER_TABLE',
+        'DEFAULT_SEARCH_TOPIC_BY_DATE_LIMIT_PER_TABLE', 'DEFAULT_GET_COMMENTS_FOR_TOPIC_LIMIT',
+        'DEFAULT_SEARCH_TOPIC_ON_PLATFORM_LIMIT', 'MAX_SEARCH_RESULTS_FOR_LLM',
+        'MAX_HIGH_CONFIDENCE_SENTIMENT_RESULTS', 'MAX_REFLECTIONS', 'MAX_PARAGRAPHS',
+        'SEARCH_TIMEOUT', 'MAX_CONTENT_LENGTH', 'SEARCH_CONTENT_MAX_LENGTH',
+        'SAVE_INTERMEDIATE_STATES', 'MAX_SEARCH_RESULTS',
+        'LLM_REQUEST_TIMEOUT', 'INSIGHTENGINE_REQUEST_TIMEOUT', 'MEDIAENGINE_REQUEST_TIMEOUT',
+        'QUERYENGINE_REQUEST_TIMEOUT', 'REPORTENGINE_REQUEST_TIMEOUT',
     ]
     for k in _keys_to_clear:
         os.environ.pop(k, None)

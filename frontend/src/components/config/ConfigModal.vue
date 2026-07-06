@@ -25,6 +25,7 @@
                 :value="opt.value"
               />
             </el-select>
+            <p v-if="field.hint" class="field-hint">{{ field.hint }}</p>
           </template>
           <template v-else>
             <label class="field-label">{{ field.label }}</label>
@@ -43,6 +44,7 @@
                 </el-icon>
               </template>
             </el-input>
+            <p v-if="field.hint" class="field-hint">{{ field.hint }}</p>
           </template>
         </div>
       </div>
@@ -175,6 +177,12 @@ async function saveConfig() {
 .field-label {
   font-size: 12px;
   color: #606266;
+}
+.field-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #909399;
 }
 .password-toggle {
   cursor: pointer;

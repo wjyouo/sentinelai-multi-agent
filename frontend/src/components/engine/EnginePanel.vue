@@ -49,6 +49,19 @@
               <p v-if="citation.score"><strong>相关度评分:</strong> {{ citation.score }}</p>
               <p><strong>搜索次数:</strong> {{ citation.search_count }}</p>
               <p><strong>反思次数:</strong> {{ citation.reflection_count }}</p>
+              <p v-if="citation.source_label || citation.credibility">
+                <strong>来源可信度:</strong>
+                {{ citation.source_label || citation.source_type || '未知来源' }}
+                <span v-if="citation.credibility"> / {{ citation.credibility }}</span>
+              </p>
+              <p v-if="citation.source_domain || citation.published_date">
+                <strong>来源信息:</strong>
+                {{ citation.source_domain || '未知域名' }}
+                <span v-if="citation.published_date"> / {{ citation.published_date }}</span>
+              </p>
+              <p v-if="citation.credibility_reason">
+                <strong>评级原因:</strong> {{ citation.credibility_reason }}
+              </p>
             </el-collapse-item>
           </el-collapse>
         </el-tab-pane>
@@ -64,11 +77,16 @@ import { marked } from 'marked'
 import { useSearchStore, type EngineState } from '@/stores/search'
 
 const props = withDefaults(defineProps<{
-  engine: 'insight' | 'media' | 'query'
+  engine: 'trendscope' | 'insight' | 'media' | 'query'
 }>(), {})
 
 const engineLabel = computed(() => {
-  const labels: Record<string, string> = { insight: 'Insight Agent', media: 'Media Agent', query: 'Query Agent' }
+  const labels: Record<string, string> = {
+    trendscope: 'TrendScope',
+    insight: 'Insight Agent',
+    media: 'Media Agent',
+    query: 'Query Agent',
+  }
   return labels[props.engine] || props.engine
 })
 
